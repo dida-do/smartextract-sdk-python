@@ -1,0 +1,87 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "smartextract"
+dynamic = ["version"]
+description = "smartextract Python SDK"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+keywords = []
+authors = [
+  { name = "dida Datenschmiede GmbH", email = "info@dida.do" },
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: Implementation :: CPython",
+  "Programming Language :: Python :: Implementation :: PyPy",
+]
+dependencies = [
+  "pydantic[email]>=2.0,<3",
+  "httpx>=0.25"
+]
+
+[project.urls]
+Documentation = "https://docs.smartextract.ai"
+Issues = "https://github.com/dida-do/smartextract-sdk-python/issues"
+Source = "https://github.com/dida-do/smartextract-sdk-python"
+
+[project.scripts]
+smartextract = "smartextract.__main__:main"
+
+[tool.hatch.version]
+path = "smartextract/__init__.py"
+
+[[tool.hatch.envs.hatch-test.matrix]]
+python = ["3.12", "3.11", "3.10"]
+
+[tool.hatch.envs.types]
+extra-dependencies = [
+  "mypy>=1.11.0",
+]
+
+[tool.hatch.envs.types.scripts]
+check = "mypy --install-types --non-interactive {args:smartextract}"
+
+[tool.hatch.envs.coverage]
+dependencies = ["coverage"]
+
+[tool.hatch.envs.coverage.scripts]
+xml = "coverage xml"
+
+[tool.coverage.run]
+source_pkgs = ["smartextract"]
+branch = true
+parallel = true
+
+[tool.coverage.paths]
+smartextract = ["smartextract", "*/smartextract/smartextract"]
+tests = ["tests", "*/smartextract/tests"]
+
+[tool.coverage.report]
+exclude_lines = [
+  "no cov",
+  "if __name__ == .__main__.:",
+  "if TYPE_CHECKING:",
+]
+
+[tool.ruff]
+line-length = 88
+[tool.ruff.lint]
+ignore = [
+  "ARG",
+  "EM",
+  "INP",
+  "PLW",
+  "T20",
+  "TRY",
+  "UP038",  # Use `X | Y` in `isinstance` call instead of `(X, Y)`
+]
