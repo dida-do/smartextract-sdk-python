@@ -14,6 +14,7 @@ from pydantic import BaseModel, EmailStr, Field, JsonValue
 
 __version__ = "0"
 
+DEFAULT_ENDPOINT = "https://api.smartextract.ai"
 DEFAULT_TIMEOUT = 600  # seconds
 
 ResourceID = Union[str, UUID]
@@ -191,6 +192,16 @@ def drop_none(**kwargs) -> dict[str, Any]:
     return {k: v for k, v in kwargs.items() if v is not None}
 
 
+def _get_jwt_token(endpoint, username, password) -> str:
+    r = httpx.post(
+        f"{endpoint}/auth/jwt/login",
+        data={"username": username, "password": password},
+    )
+    if not r.is_success:
+        raise ClientError.from_response(r)
+    return r.json()["access_token"]
+
+
 class Client:
     """smartextract API client."""
 
@@ -199,7 +210,7 @@ class Client:
         api_key: Optional[str] = None,
         username: Optional[str] = None,
         password: Optional[str] = None,
-        endpoint: str = "https://api.smartextract.ai",
+        endpoint: str = DEFAULT_ENDPOINT,
         timeout: Union[None, float, httpx.Timeout] = DEFAULT_TIMEOUT,
     ):
         if api_key is None:
@@ -209,13 +220,7 @@ class Client:
                 )
             if not password:
                 raise ValueError("A password must be provided.")
-            r = httpx.post(
-                f"{endpoint}/auth/jwt/login",
-                data={"username": username, "password": password},
-            )
-            if not r.is_success:
-                raise ClientError.from_response(r)
-            api_key = r.json()["access_token"]
+            api_key = _get_jwt_token(endpoint, username, password)
         self._httpx = httpx.Client(
             base_url=endpoint,
             headers={"Authorization": f"Bearer {api_key}"},
