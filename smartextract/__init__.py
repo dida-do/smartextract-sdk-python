@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import IO, TYPE_CHECKING, Any, Generic, TypeVar
+from typing import IO, TYPE_CHECKING, Any, Generic, Optional, TypeVar, Union
 from uuid import UUID
 
 if TYPE_CHECKING:
@@ -14,9 +14,9 @@ from pydantic import BaseModel, EmailStr, Field, JsonValue
 
 __version__ = "0"
 
-DEFAULT_TIMEOUT = 600
+DEFAULT_TIMEOUT = 600  # seconds
 
-ResourceID = str | UUID
+ResourceID = Union[str, UUID]
 
 
 class BillingScheme(str, Enum):
@@ -89,7 +89,7 @@ class UserInfo(BaseInfo):
     id: UUID
     email: EmailStr
     billing_scheme: BillingScheme
-    balance: int | None
+    balance: Optional[int]
     previous_refill_balance: int
     previous_refill_credits: int
     previous_refill_date: datetime
@@ -99,7 +99,7 @@ class JobInfo(BaseInfo):
     pipeline_id: UUID
     started_at: datetime
     duration: timedelta
-    error: str | None
+    error: Optional[str]
 
 
 class UserPermission(BaseInfo):
@@ -111,7 +111,7 @@ class UserPermission(BaseInfo):
 
 class IdInfo(BaseInfo):
     id: UUID
-    alias: str | None = None
+    alias: Optional[str] = None
 
 
 class ResourceInfo(IdInfo):
@@ -166,8 +166,8 @@ class ExtractionInfo(BaseInfo):
 
 class PipelineResult(BaseInfo):
     result: JsonValue
-    error: str | None = None
-    log: list[str] | None = None
+    error: Optional[str] = None
+    log: Optional[list[str]] = None
 
 
 InfoT = TypeVar("InfoT", bound=BaseInfo)
@@ -196,11 +196,11 @@ class Client:
 
     def __init__(
         self,
-        api_key: str | None = None,
-        username: str | None = None,
-        password: str | None = None,
+        api_key: Optional[str] = None,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
         endpoint: str = "https://api.smartextract.ai",
-        timeout: None | float | httpx.Timeout = DEFAULT_TIMEOUT,
+        timeout: Union[None, float, httpx.Timeout] = DEFAULT_TIMEOUT,
     ):
         if api_key is None:
             if not username:
@@ -241,9 +241,9 @@ class Client:
         self,
         user: str,
         *,
-        billing_scheme: BillingScheme | None = None,
-        new_credits: int | None = None,
-        balance: int | None = None,
+        billing_scheme: Optional[BillingScheme] = None,
+        new_credits: Optional[int] = None,
+        balance: Optional[int] = None,
     ) -> UserInfo:
         r1 = self._request("GET", f"/users/{user}")
         r2 = self._request(
@@ -305,7 +305,7 @@ class Client:
         name: str,
         code: str,
         *,
-        permissions: dict[str, AccessLevel] | None = None,
+        permissions: Optional[dict[str, AccessLevel]] = None,
     ) -> UUID:
         r = self._request(
             "POST",
@@ -317,11 +317,11 @@ class Client:
     def create_template_pipeline(
         self,
         name: str,
-        template: str | dict,
+        template: Union[str, dict],
         *,
-        chat_id: ResourceID | None = None,
-        ocr_id: ResourceID | None = None,
-        permissions: dict[str, AccessLevel] | None = None,
+        chat_id: Optional[ResourceID] = None,
+        ocr_id: Optional[ResourceID] = None,
+        permissions: Optional[dict[str, AccessLevel]] = None,
     ) -> UUID:
         r = self._request(
             "POST",
@@ -340,11 +340,11 @@ class Client:
         self,
         pipeline_id: ResourceID,
         *,
-        name: str | None = None,
-        code: str | None = None,
-        template: str | dict | None = None,
-        chat_id: ResourceID | None = None,
-        ocr_id: ResourceID | None = None,
+        name: Optional[str] = None,
+        code: Optional[str] = None,
+        template: Union[None, str, dict] = None,
+        chat_id: Optional[ResourceID] = None,
+        ocr_id: Optional[ResourceID] = None,
     ) -> None:
         self._request(
             "PATCH",
@@ -358,7 +358,7 @@ class Client:
         )
 
     def run_pipeline(
-        self, pipeline_id: ResourceID | None, document: bytes | IO
+        self, pipeline_id: Optional[ResourceID], document: Union[bytes, IO]
     ) -> PipelineResult:
         r = self._request(
             "POST", f"/pipelines/{pipeline_id}/run", files={"document": document}
@@ -367,9 +367,9 @@ class Client:
 
     def run_anonymous_pipeline(
         self,
-        document: bytes | IO,
-        code: str | None = None,
-        template: dict | None = None,
+        document: Union[bytes, IO],
+        code: Optional[str] = None,
+        template: Optional[dict] = None,
     ) -> PipelineResult:
         if code is None:
             if template is None:
@@ -386,9 +386,9 @@ class Client:
         self,
         inbox_id: ResourceID,
         *,
-        name: str | None = None,
-        pipeline_id: ResourceID | None = None,
-        ocr_id: ResourceID | None = None,
+        name: Optional[str] = None,
+        pipeline_id: Optional[ResourceID] = None,
+        ocr_id: Optional[ResourceID] = None,
     ) -> None:
         self._request(
             "PATCH",
@@ -403,7 +403,7 @@ class Client:
         r = self._request("GET", f"/inboxes/{inbox_id}/jobs")
         return Page[JobInfo].from_response(r)
 
-    def create_document(self, inbox_id: ResourceID, document: bytes | IO) -> UUID:
+    def create_document(self, inbox_id: ResourceID, document: Union[bytes, IO]) -> UUID:
         r = self._request("POST", f"/inboxes/{inbox_id}", files={"document": document})
         return UUID(r.json()["id"])
 
