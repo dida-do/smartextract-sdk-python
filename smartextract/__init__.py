@@ -212,6 +212,7 @@ class Client:
         password: Optional[str] = None,
         base_url: str = DEFAULT_BASE_URL,
         timeout: Union[None, float, httpx.Timeout] = DEFAULT_TIMEOUT,
+        _transport: httpx.BaseTransport | None = None,
     ):
         if api_key is None:
             if not username:
@@ -225,6 +226,7 @@ class Client:
             base_url=base_url,
             headers={"Authorization": f"Bearer {api_key}"},
             timeout=timeout,
+            transport=_transport,
         )
 
     def _request(self, method: str, url: str, **kwargs) -> httpx.Response:
