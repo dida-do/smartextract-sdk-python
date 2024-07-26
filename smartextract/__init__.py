@@ -14,7 +14,7 @@ from pydantic import BaseModel, EmailStr, Field, JsonValue
 
 __version__ = "0"
 
-DEFAULT_ENDPOINT = "https://api.smartextract.ai"
+DEFAULT_BASE_URL = "https://api.smartextract.ai"
 DEFAULT_TIMEOUT = 600  # seconds
 
 ResourceID = Union[str, UUID]
@@ -192,9 +192,9 @@ def drop_none(**kwargs) -> dict[str, Any]:
     return {k: v for k, v in kwargs.items() if v is not None}
 
 
-def _get_jwt_token(endpoint, username, password) -> str:
+def _get_jwt_token(base_url, username, password) -> str:
     r = httpx.post(
-        f"{endpoint}/auth/jwt/login",
+        f"{base_url}/auth/jwt/login",
         data={"username": username, "password": password},
     )
     if not r.is_success:
@@ -210,7 +210,7 @@ class Client:
         api_key: Optional[str] = None,
         username: Optional[str] = None,
         password: Optional[str] = None,
-        endpoint: str = DEFAULT_ENDPOINT,
+        base_url: str = DEFAULT_BASE_URL,
         timeout: Union[None, float, httpx.Timeout] = DEFAULT_TIMEOUT,
     ):
         if api_key is None:
@@ -220,9 +220,9 @@ class Client:
                 )
             if not password:
                 raise ValueError("A password must be provided.")
-            api_key = _get_jwt_token(endpoint, username, password)
+            api_key = _get_jwt_token(base_url, username, password)
         self._httpx = httpx.Client(
-            base_url=endpoint,
+            base_url=base_url,
             headers={"Authorization": f"Bearer {api_key}"},
             timeout=timeout,
         )

@@ -8,7 +8,7 @@ from collections.abc import Callable
 from getpass import getpass
 
 from smartextract import (
-    DEFAULT_ENDPOINT,
+    DEFAULT_BASE_URL,
     DEFAULT_TIMEOUT,
     BaseInfo,
     Client,
@@ -31,14 +31,14 @@ def print_info(m: BaseInfo):
     print(m.model_dump_json(indent=2))
 
 
-def do_login(endpoint, username) -> str:
+def do_login(base_url, username) -> str:
     if not username:
         if not sys.stdin.isatty():
             raise SystemExit("error: no username or API key provided")
         username = input("Username: ")
     password = getpass() if sys.stdin.isatty() else sys.stdin.readline().strip()
     try:
-        return _get_jwt_token(endpoint, username, password)
+        return _get_jwt_token(base_url, username, password)
     except ClientError as e:
         raise SystemExit(f"error logging in: {e.args[0]}") from e
 
@@ -53,8 +53,8 @@ cli.add_argument(
     help="print more log messages",
 )
 cli.add_argument(
-    "--endpoint",
-    default=DEFAULT_ENDPOINT,
+    "--base-url",
+    default=DEFAULT_BASE_URL,
     type=str,
     help="base URL of the API",
 )
@@ -103,11 +103,11 @@ def main():
 
     # Handle get-api-key subcommand as a special case
     if args.handler == do_login:
-        print(do_login(args.endpoint, args.username))
+        print(do_login(args.base_url, args.username))
         return
 
     # Get API key
-    api_key = os.getenv("SMARTEXTRACT_API_KEY") or do_login(args.endpoint, None)
+    api_key = os.getenv("SMARTEXTRACT_API_KEY") or do_login(args.base_url, None)
 
     # Dispatch subcommand
     timeout = args.timeout if args.timeout > 0 else None

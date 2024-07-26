@@ -10,5 +10,5 @@ def client() -> Client:
     return Client(
         username=os.getenv("SMARTEXTRACT_TEST_USERNAME"),
         password=os.getenv("SMARTEXTRACT_TEST_PASSWORD"),
-        endpoint=os.getenv("SMARTEXTRACT_TEST_ENDPOINT"),
+        base_url=os.getenv("SMARTEXTRACT_TEST_BASE_URL"),
     )
