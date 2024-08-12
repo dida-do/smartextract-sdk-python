@@ -134,6 +134,11 @@ class TemplatePipelineInfo(ResourceInfo):
     chat_id: UUID
 
 
+class TemplateInfo(IdInfo):
+    name: str
+    description: str
+
+
 class InboxInfo(ResourceInfo):
     document_count: int
     pipeline_id: UUID
@@ -235,6 +240,14 @@ class Client:
             raise ClientError.from_response(r)
         return r
 
+    def list_templates(self, language: str = "en") -> Page[TemplateInfo]:
+        # Only accepts languages "en" and "de"
+
+        r = self._request("GET", f"/templates/?lang={language}")
+        return Page[TemplateInfo].from_response(r)
+
+    # User Management
+
     def get_user_info(self, user: str = "me") -> UserInfo:
         r1 = self._request("GET", f"/users/{user}")
         r2 = self._request("GET", f"/users/{user}/credits")
@@ -264,6 +277,8 @@ class Client:
         )
         return UserInfo(**r1.json(), **r2.json())
 
+    # Resources
+
     def list_resources(self, type: str | None = None) -> Page[IdInfo]:  # noqa: A002
         r = self._request("GET", "/resources", params=drop_none(type=type))
         return Page[IdInfo].from_response(r)
@@ -277,9 +292,9 @@ class Client:
     def list_inboxes(self) -> Page[IdInfo]:
         return self.list_resources(type="inbox")
 
-    def list_documents(self, inbox_id: ResourceID) -> Page[DocumentShortInfo]:
+    def list_inbox_documents(self, inbox_id: ResourceID) -> Page[DocumentInfo]:
         r = self._request("GET", f"/inboxes/{inbox_id}/documents")
-        return Page[DocumentShortInfo].from_response(r)
+        return Page[DocumentInfo].from_response(r)
 
     def get_resource_info(self, resource_id: ResourceID) -> ResourceInfo:
         info = self._request("GET", f"/resources/{resource_id}").json()
@@ -306,6 +321,8 @@ class Client:
             f"/resources/{resource_id}/permissions",
             json={"user": user, "level": level},
         )
+
+    # Pipelines
 
     def create_lua_pipeline(
         self,
@@ -357,6 +374,7 @@ class Client:
             "PATCH",
             f"/pipelines/{pipeline_id}",
             json=drop_none(
+                name=name,
                 code=code,
                 template=template,
                 chat_id=chat_id,
@@ -389,6 +407,22 @@ class Client:
         )
         return PipelineResult.from_response(r)
 
+    def list_pipeline_jobs(self, pipeline_id: Optional[ResourceID]) -> Page[JobInfo]:
+        r = self._request("GET", f"/pipelines/{pipeline_id}/jobs")
+        return Page[JobInfo].from_response(r)
+
+    # Inboxes
+
+    def create_inbox(
+        self, name: str, pipeline_id: str, *, ocr_id: Optional[str] = None
+    ) -> UUID:
+        r = self._request(
+            "POST",
+            "/inboxes",
+            json=drop_none(name=name, pipeline_id=pipeline_id, ocr_id=ocr_id),
+        )
+        return UUID(r.json()["id"])
+
     def modify_inbox(
         self,
         inbox_id: ResourceID,
@@ -413,6 +447,12 @@ class Client:
     def create_document(self, inbox_id: ResourceID, document: Union[bytes, IO]) -> UUID:
         r = self._request("POST", f"/inboxes/{inbox_id}", files={"document": document})
         return UUID(r.json()["id"])
+
+    def list_inbox_extraction(self, inbox_id: ResourceID) -> Page[ExtractionInfo]:
+        r = self._request("GET", f"inboxes/{inbox_id}/extractions")
+        return Page[ExtractionInfo].from_response(r)
+
+    # Documents
 
     def get_document_info(self, document_id: ResourceID) -> DocumentInfo:
         r = self._request("GET", f"/documents/{document_id}")
