@@ -264,18 +264,16 @@ class Client:
         billing_scheme: Optional[BillingScheme] = None,
         new_credits: Optional[int] = None,
         balance: Optional[int] = None,
-    ) -> UserInfo:
-        r1 = self._request("GET", f"/users/{user}")
-        r2 = self._request(
+    ) -> None:
+        self._request(
             "PATCH",
-            f"/users/{user}/jobs",
-            json={
-                "billing_scheme": billing_scheme,
-                "new_credits": new_credits,
-                "balance": balance,
-            },
+            f"/users/{user}/credits",
+            json=drop_none(
+                billing_scheme=billing_scheme,
+                new_credits=new_credits,
+                balance=balance,
+            ),
         )
-        return UserInfo(**r1.json(), **r2.json())
 
     # Resources
 
