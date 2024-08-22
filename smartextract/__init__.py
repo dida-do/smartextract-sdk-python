@@ -6,6 +6,7 @@ The documentation to this package can be found at https://docs.smartextract.ai/
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import IO, TYPE_CHECKING, Any, Generic, Optional, TypeVar, Union
@@ -15,7 +16,7 @@ if TYPE_CHECKING:
     from typing import Self  # For Python ≤ 3.10
 
 import httpx
-from pydantic import BaseModel, EmailStr, Field, JsonValue
+from pydantic import BaseModel, EmailStr, JsonValue
 
 __version__ = "0"
 
@@ -113,7 +114,7 @@ class UserInfo(BaseInfo):
 class JobInfo(BaseInfo):
     """Information about a pipeline run."""
 
-    pipeline_id: UUID
+    pipeline_id: Optional[UUID]
     started_at: datetime
     duration: timedelta
     error: Optional[str]
@@ -167,11 +168,13 @@ class TemplatePipelineInfo(ResourceInfo):
     chat_id: UUID
 
 
-class TemplateInfo(IdInfo):
+class TemplateInfo(BaseInfo):
     """Information about an extraction template."""
 
+    id: str  # not UUID, the format is name.language
     name: str
     description: str
+    categories: list
 
 
 class InboxInfo(ResourceInfo):
@@ -187,15 +190,6 @@ class InboxInfo(ResourceInfo):
     ocr_id: UUID
 
 
-class DocumentShortInfo(BaseInfo):
-    """Information about a Document."""
-
-    id: UUID
-    name: str
-    created_at: datetime
-    created_by: EmailStr
-
-
 class DocumentInfo(BaseInfo):
     """Information about a Document.
 
@@ -205,7 +199,7 @@ class DocumentInfo(BaseInfo):
     """
 
     id: UUID
-    inbox_id: UUID = Field(validation_alias="collection")
+    inbox_id: UUID
     name: str
     media_type: str
     created_at: datetime
@@ -221,10 +215,10 @@ class ExtractionInfo(BaseInfo):
 
     document_id: UUID
     document_name: str
-    pipeline_id: UUID = Field(validation_alias="pipeline")
+    pipeline_id: UUID
     created_at: datetime
     created_by: EmailStr
-    result: JsonValue = Field(validation_alias="data")
+    result: JsonValue
 
 
 class JobResult(BaseInfo):
@@ -308,12 +302,14 @@ class Client:
             raise ClientError.from_response(r)
         return r
 
-    def list_templates(self, language: str = "en") -> Page[TemplateInfo]:
-        """List all available templates in format name.language."""
-        # Only accepts languages "en" and "de"
+    def list_templates(self, language: str = "en") -> list[TemplateInfo]:
+        """List all available templates in format name.language.
 
-        r = self._request("GET", f"/templates/?lang={language}")
-        return Page[TemplateInfo].from_response(r)
+        Allowed languages are "en" and "de"
+        """
+
+        r = self._request("GET", f"/templates?lang={language}")
+        return [TemplateInfo(**template) for template in r.json()]
 
     # User Management
 
@@ -511,21 +507,21 @@ class Client:
             ),
         )
 
-    def run_pipeline(
-        self, pipeline_id: Optional[ResourceID], document: Union[bytes, IO]
-    ) -> JobResult:
+    def run_pipeline(self, pipeline_id: ResourceID, document: IO) -> JobResult:
         """Process a document through a pipeline.
 
         Provide the pipeline id and document as IO string or in bytes.
         """
         r = self._request(
-            "POST", f"/pipelines/{pipeline_id}/run", files={"document": document}
+            "POST",
+            f"/pipelines/{pipeline_id}/run",
+            files={"document": ("_", document.read(), "application/pdf")},
         )
         return JobResult.from_response(r)
 
     def run_anonymous_pipeline(
         self,
-        document: Union[bytes, IO],
+        document: IO,
         code: Optional[str] = None,
         template: Optional[dict] = None,
     ) -> JobResult:
@@ -540,7 +536,7 @@ class Client:
         elif template is not None:
             raise ValueError("Only one of code or template must be provided")
         r = self._request(
-            "POST", "/pipelines/run", files={"document": document, "code": code}
+            "POST", "/pipelines/run", files={"document": document.read(), "code": code}
         )
         return JobResult.from_response(r)
 
@@ -578,6 +574,7 @@ class Client:
             "PATCH",
             f"/inboxes/{inbox_id}",
             json=drop_none(
+                name=name,
                 pipeline_id=pipeline_id,
                 ocr_id=ocr_id,
             ),
@@ -588,14 +585,28 @@ class Client:
         r = self._request("GET", f"/inboxes/{inbox_id}/jobs")
         return Page[JobInfo].from_response(r)
 
-    def create_document(self, inbox_id: ResourceID, document: Union[bytes, IO]) -> UUID:
+    def create_document(self, inbox_id: ResourceID, document: IO) -> UUID:
         """Push document to the database."""
-        r = self._request("POST", f"/inboxes/{inbox_id}", files={"document": document})
+        r = self._request(
+            "POST",
+            f"/inboxes/{inbox_id}",
+            files={
+                "document": (
+                    os.path.basename(document.name),
+                    document.read(),
+                    "application/pdf",
+                )
+            },
+        )
         return UUID(r.json()["id"])
 
     def list_inbox_extraction(self, inbox_id: ResourceID) -> Page[ExtractionInfo]:
         """List all extraction results of an inbox."""
-        r = self._request("GET", f"inboxes/{inbox_id}/extractions")
+        r = self._request(
+            "GET",
+            f"inboxes/{inbox_id}/extractions",
+            headers={"accept": "application/json"},
+        )
         return Page[ExtractionInfo].from_response(r)
 
     # Documents
@@ -611,7 +622,7 @@ class Client:
 
     def get_document_bytes(self, document_id: ResourceID) -> bytes:
         """Get document content in bytes."""
-        r = self._request("GET", f"/documents/{document_id}")
+        r = self._request("GET", f"/documents/{document_id}/blob")
         return r.content
 
     def get_document_extraction(self, document_id: ResourceID) -> ExtractionInfo:
