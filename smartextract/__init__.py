@@ -1,3 +1,8 @@
+"""The smartextract SDK allows easy access to the smartextract API.
+
+The documentation to this package can be found at https://docs.smartextract.ai/
+"""
+
 from __future__ import annotations
 
 import json
@@ -21,7 +26,13 @@ ResourceID = Union[str, UUID]
 
 
 class BillingScheme(str, Enum):
-    """Enumeration of billing schemes."""
+    """Enumeration of billing schemes.
+
+    The following options are available:
+    - by_invoice: User has unlimited access.
+    - per_page: Each processed document consumes one credit per page.
+
+    """
 
     by_invoice = "by_invoice"
     per_page = "per_page"
@@ -43,6 +54,7 @@ class BaseInfo(BaseModel):
 
     @classmethod
     def from_response(cls, r: httpx.Response) -> Self:
+        """Create this object based on the output of an API request."""
         return cls(**r.json())
 
     def _repr_pretty_(self, p, cycle) -> None:
@@ -87,6 +99,8 @@ class BaseInfo(BaseModel):
 
 
 class UserInfo(BaseInfo):
+    """Details about a user including email, credit balance and billing method."""
+
     id: UUID
     email: EmailStr
     billing_scheme: BillingScheme
@@ -97,6 +111,8 @@ class UserInfo(BaseInfo):
 
 
 class JobInfo(BaseInfo):
+    """Information about a pipeline run."""
+
     pipeline_id: UUID
     started_at: datetime
     duration: timedelta
@@ -104,6 +120,8 @@ class JobInfo(BaseInfo):
 
 
 class UserPermission(BaseInfo):
+    """Permission level of a user to a resource."""
+
     user: EmailStr
     level: AccessLevel
     created_at: datetime
@@ -111,11 +129,22 @@ class UserPermission(BaseInfo):
 
 
 class IdInfo(BaseInfo):
+    """Identification of a resource."""
+
     id: UUID
     alias: Optional[str] = None
 
 
 class ResourceInfo(IdInfo):
+    """Information about a resource.
+
+    We designate a resource to all entities to which users have access
+    permissions, possibly an alias, etc.
+
+    It also contains and the users access rights to it,
+    and when the access was granted
+    """
+
     type: str
     name: str
     private_access: AccessLevel
@@ -125,27 +154,42 @@ class ResourceInfo(IdInfo):
 
 
 class LuaPipelineInfo(ResourceInfo):
+    """Information about a lua pipeline including lua script and name."""
+
     code: str
 
 
 class TemplatePipelineInfo(ResourceInfo):
+    """Information about a template pipeline."""
+
     template: dict
     ocr_id: UUID
     chat_id: UUID
 
 
 class TemplateInfo(IdInfo):
+    """Information about an extraction template."""
+
     name: str
     description: str
 
 
 class InboxInfo(ResourceInfo):
+    """Information about an inbox.
+
+    An inbox is a repository where documents can be stored long-term.
+    Every inbox has an associated pipeline (but one pipeline
+    may be associated to multiple inboxes).
+    """
+
     document_count: int
     pipeline_id: UUID
     ocr_id: UUID
 
 
 class DocumentShortInfo(BaseInfo):
+    """Information about a Document."""
+
     id: UUID
     name: str
     created_at: datetime
@@ -153,6 +197,13 @@ class DocumentShortInfo(BaseInfo):
 
 
 class DocumentInfo(BaseInfo):
+    """Information about a Document.
+
+    Currently, it can be a PDF file or an image (JPEG or PNG format).
+
+    When a document is stored, it belongs to an inbox and is identified by a UUID.
+    """
+
     id: UUID
     inbox_id: UUID = Field(validation_alias="collection")
     name: str
@@ -162,6 +213,12 @@ class DocumentInfo(BaseInfo):
 
 
 class ExtractionInfo(BaseInfo):
+    """Result of a document extraction.
+
+    The result contains the document's content in the desired template format,
+    or it contains the lua script's output.
+    """
+
     document_id: UUID
     document_name: str
     pipeline_id: UUID = Field(validation_alias="pipeline")
@@ -170,7 +227,9 @@ class ExtractionInfo(BaseInfo):
     result: JsonValue = Field(validation_alias="data")
 
 
-class PipelineResult(BaseInfo):
+class JobResult(BaseInfo):
+    """Result of a pipeline run."""
+
     result: JsonValue
     error: Optional[str] = None
     log: Optional[list[str]] = None
@@ -180,6 +239,12 @@ InfoT = TypeVar("InfoT", bound=BaseInfo)
 
 
 class Page(BaseInfo, Generic[InfoT]):
+    """Abstract Class used to contain a list of information.
+
+    The "results" list can be a selected subset of all resources.
+    Nevertheless "count" displays the actual number of resources
+    """
+
     count: int
     results: list[InfoT]
 
@@ -189,6 +254,7 @@ class ClientError(Exception):
 
     @classmethod
     def from_response(cls, r: httpx.Response) -> Self:
+        """Read error from the API's response."""
         return cls(r.reason_phrase, r.text, r.request)
 
 
@@ -198,6 +264,7 @@ def drop_none(**kwargs) -> dict[str, Any]:
 
 
 def _get_jwt_token(base_url, username, password) -> str:
+    """Obtain jwt access token by providing username and passowrd."""
     r = httpx.post(
         f"{base_url}/auth/jwt/login",
         data={"username": username, "password": password},
@@ -219,6 +286,7 @@ class Client:
         timeout: Union[None, float, httpx.Timeout] = DEFAULT_TIMEOUT,
         _transport: httpx.BaseTransport | None = None,
     ):
+        """Initialize the Client using either your API key or username and passwort."""
         if api_key is None:
             if not username:
                 raise ValueError(
@@ -241,6 +309,7 @@ class Client:
         return r
 
     def list_templates(self, language: str = "en") -> Page[TemplateInfo]:
+        """List all available templates in format name.language."""
         # Only accepts languages "en" and "de"
 
         r = self._request("GET", f"/templates/?lang={language}")
@@ -249,11 +318,16 @@ class Client:
     # User Management
 
     def get_user_info(self, user: str = "me") -> UserInfo:
+        """Request stored information and credit balance of a given user."""
         r1 = self._request("GET", f"/users/{user}")
         r2 = self._request("GET", f"/users/{user}/credits")
         return UserInfo(**r1.json(), **r2.json())
 
     def list_user_jobs(self, user: str = "me") -> Page[JobInfo]:
+        """List all a user's jobs with their duration and status.
+
+        A job started whenever a document is passed throuh a pipeline.
+        """
         r = self._request("GET", f"/users/{user}/jobs")
         return Page[JobInfo].from_response(r)
 
@@ -265,6 +339,19 @@ class Client:
         new_credits: Optional[int] = None,
         balance: Optional[int] = None,
     ) -> None:
+        """Set billing information for a user.
+
+        billing_scheme ... a user can be billed "by_invoice" or "per_page"
+
+        If the user is billed "per_page", they will consume
+        one credit of their balance per processed page.
+
+        Then Smartextract admins can either:
+
+        new_credits ... add new credits to existing balance
+        balance ... reset balance to new value
+
+        """
         self._request(
             "PATCH",
             f"/users/{user}/credits",
@@ -278,23 +365,45 @@ class Client:
     # Resources
 
     def list_resources(self, type: str | None = None) -> Page[IdInfo]:  # noqa: A002
+        """List the ids of all the users resources.
+
+        The user can create resources of type
+        ["inbox", "template_pipeline", "lua_pipeline"]
+
+        The user can use resources of type ["aws-ocr", "openai-chat, "anthropic-chat"]
+        as input to the creation methods.
+
+        """
         r = self._request("GET", "/resources", params=drop_none(type=type))
         return Page[IdInfo].from_response(r)
 
     def list_lua_pipelines(self) -> Page[IdInfo]:
+        """List the ids of all the users lua_pipelines.
+
+        Pipelines can be started with a lua script
+        by using create_lua_pipeline(...)
+        """
         return self.list_resources(type="lua_pipeline")
 
     def list_template_pipelines(self) -> Page[IdInfo]:
+        """List all created pipelines that are based on a template."""
         return self.list_resources(type="template_pipeline")
 
     def list_inboxes(self) -> Page[IdInfo]:
+        """List all inboxes with the attached pipeline."""
         return self.list_resources(type="inbox")
 
     def list_inbox_documents(self, inbox_id: ResourceID) -> Page[DocumentInfo]:
+        """List all documents inside an inbox."""
         r = self._request("GET", f"/inboxes/{inbox_id}/documents")
         return Page[DocumentInfo].from_response(r)
 
     def get_resource_info(self, resource_id: ResourceID) -> ResourceInfo:
+        """Get various information about a given resource.
+
+        Information includes the resource type, name, access level,
+        and additional details specific to the resource type.
+        """
         info = self._request("GET", f"/resources/{resource_id}").json()
         if info["type"] == "lua_pipeline":
             r = self._request("GET", f"/pipelines/{resource_id}")
@@ -308,12 +417,14 @@ class Client:
         return ResourceInfo(**info)
 
     def list_permissions(self, resource_id: ResourceID) -> Page[UserPermission]:
+        """For a given resource, list all users with access rights."""
         r = self._request("GET", f"/resources/{resource_id}/permissions")
         return Page[UserPermission].from_response(r)
 
     def create_permission(
         self, resource_id: ResourceID, user: str, level: AccessLevel
     ) -> None:
+        """Allow user access to a resource."""
         self._request(
             "POST",
             f"/resources/{resource_id}/permissions",
@@ -329,6 +440,13 @@ class Client:
         *,
         permissions: Optional[dict[str, AccessLevel]] = None,
     ) -> UUID:
+        """Create a new pipeline by providing a lua script.
+
+        To run the pipeline for a PDF-document use run_pipeline(..)
+
+        In the lua script's scope the PDF is available by the variable
+        "document", which is an Iterator of Pages.
+        """
         r = self._request(
             "POST",
             "/pipelines",
@@ -345,6 +463,14 @@ class Client:
         ocr_id: Optional[ResourceID] = None,
         permissions: Optional[dict[str, AccessLevel]] = None,
     ) -> UUID:
+        """Create a new pipeline based on a yaml-template.
+
+        template ... consult the docs: https://docs.smartextract.ai/guide/pipelines/#templates
+
+        chat_id ... must be of resource type "openai-chat" or "anthropic-chat"
+        ocr_id ... must be of resource type "aws-ocr"
+
+        """
         r = self._request(
             "POST",
             "/pipelines",
@@ -368,6 +494,11 @@ class Client:
         chat_id: Optional[ResourceID] = None,
         ocr_id: Optional[ResourceID] = None,
     ) -> None:
+        """Change details of an existing pipeline.
+
+        Provide a new Lua script (code) for a Lua pipeline.
+        Or provide a new chat_id, ocr_id or template for a template pipeline.
+        """
         self._request(
             "PATCH",
             f"/pipelines/{pipeline_id}",
@@ -382,18 +513,26 @@ class Client:
 
     def run_pipeline(
         self, pipeline_id: Optional[ResourceID], document: Union[bytes, IO]
-    ) -> PipelineResult:
+    ) -> JobResult:
+        """Process a document through a pipeline.
+
+        Provide the pipeline id and document as IO string or in bytes.
+        """
         r = self._request(
             "POST", f"/pipelines/{pipeline_id}/run", files={"document": document}
         )
-        return PipelineResult.from_response(r)
+        return JobResult.from_response(r)
 
     def run_anonymous_pipeline(
         self,
         document: Union[bytes, IO],
         code: Optional[str] = None,
         template: Optional[dict] = None,
-    ) -> PipelineResult:
+    ) -> JobResult:
+        """Run document through pipeline without creating an inbox.
+
+        A lua script (code) or a yaml-file (template) must be provided.
+        """
         if code is None:
             if template is None:
                 raise ValueError("Either code or template must be provided")
@@ -403,9 +542,10 @@ class Client:
         r = self._request(
             "POST", "/pipelines/run", files={"document": document, "code": code}
         )
-        return PipelineResult.from_response(r)
+        return JobResult.from_response(r)
 
     def list_pipeline_jobs(self, pipeline_id: Optional[ResourceID]) -> Page[JobInfo]:
+        """List all pipeline runs of a pipeline."""
         r = self._request("GET", f"/pipelines/{pipeline_id}/jobs")
         return Page[JobInfo].from_response(r)
 
@@ -414,6 +554,10 @@ class Client:
     def create_inbox(
         self, name: str, pipeline_id: str, *, ocr_id: Optional[str] = None
     ) -> UUID:
+        """Create container for storing documents of common type.
+
+        Inbox must be set up with document-type specific extraction pipeline.
+        """
         r = self._request(
             "POST",
             "/inboxes",
@@ -429,6 +573,7 @@ class Client:
         pipeline_id: Optional[ResourceID] = None,
         ocr_id: Optional[ResourceID] = None,
     ) -> None:
+        """Set new pipeline for an inbox."""
         self._request(
             "PATCH",
             f"/inboxes/{inbox_id}",
@@ -439,30 +584,37 @@ class Client:
         )
 
     def list_inbox_jobs(self, inbox_id: ResourceID) -> Page[JobInfo]:
+        """List all a inbox' pipeline runs."""
         r = self._request("GET", f"/inboxes/{inbox_id}/jobs")
         return Page[JobInfo].from_response(r)
 
     def create_document(self, inbox_id: ResourceID, document: Union[bytes, IO]) -> UUID:
+        """Push document to the database."""
         r = self._request("POST", f"/inboxes/{inbox_id}", files={"document": document})
         return UUID(r.json()["id"])
 
     def list_inbox_extraction(self, inbox_id: ResourceID) -> Page[ExtractionInfo]:
+        """List all extraction results of an inbox."""
         r = self._request("GET", f"inboxes/{inbox_id}/extractions")
         return Page[ExtractionInfo].from_response(r)
 
     # Documents
 
     def get_document_info(self, document_id: ResourceID) -> DocumentInfo:
+        """Get name, access level and inbox location for a given document id."""
         r = self._request("GET", f"/documents/{document_id}")
         return DocumentInfo.from_response(r)
 
     def delete_document(self, document_id: ResourceID) -> None:
+        """Delete document from database."""
         self._request("DELETE", f"/documents/{document_id}")
 
     def get_document_bytes(self, document_id: ResourceID) -> bytes:
+        """Get document content in bytes."""
         r = self._request("GET", f"/documents/{document_id}")
         return r.content
 
     def get_document_extraction(self, document_id: ResourceID) -> ExtractionInfo:
+        """Get the document extraction from its latest pipeline processing."""
         r = self._request("GET", f"/documents/{document_id}/extraction")
         return ExtractionInfo.from_response(r)

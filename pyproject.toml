@@ -76,13 +76,11 @@ exclude_lines = [
 line-length = 88
 
 [tool.ruff.lint]
-ignore = [
-  "ARG",
-  "EM",
-  "INP",
-  "PLW",
-  "T20",
-  "TRY",
-  "UP007",  # Use `X | Y` for type annotations (for Python ≤ 3.9)
-  "UP038",  # Use `X | Y` in `isinstance` call instead of `(X, Y)`
-]
+select = ["E", "F", "W", "I", "D", "A", "N", "B", "SIM", "C4", "TID"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+# Ignore docstring duty for tests folder 
+"tests/**" = ["D"]

@@ -28,10 +28,12 @@ def handler(subcommand: ArgumentParser):
 
 
 def print_info(m: BaseInfo):
+    """Print all the object's content in JSON format."""
     print(m.model_dump_json(indent=2))
 
 
 def do_login(base_url, username) -> str:
+    """Prompt the user to type in username and password."""
     if not username:
         if not sys.stdin.isatty():
             raise SystemExit("error: no username or API key provided")
