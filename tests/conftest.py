@@ -1,5 +1,6 @@
 import os
 from uuid import UUID
+from os.path import basename
 
 import pytest
 
@@ -41,8 +42,16 @@ def document():
 
 
 @pytest.fixture
+def document_2():
+    file = open("tests/data/hello-world.png", "rb")  # noqa: SIM115
+    yield file
+
+    file.close()
+
+
+@pytest.fixture
 def document_name(document):
-    return os.path.basename(document.name)
+    return basename(document.name)
 
 
 @pytest.fixture

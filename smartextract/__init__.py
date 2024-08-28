@@ -6,11 +6,13 @@ The documentation to this package can be found at https://docs.smartextract.ai/
 from __future__ import annotations
 
 import json
-import os
 from datetime import datetime, timedelta
 from enum import Enum
+from io import IOBase
 from typing import IO, TYPE_CHECKING, Any, Generic, Optional, TypeVar, Union
 from uuid import UUID
+from mimetypes import MimeTypes
+from os.path import basename
 
 if TYPE_CHECKING:
     from typing import Self  # For Python ≤ 3.10
@@ -307,7 +309,6 @@ class Client:
 
         Allowed languages are "en" and "de"
         """
-
         r = self._request("GET", f"/templates?lang={language}")
         return [TemplateInfo(**template) for template in r.json()]
 
@@ -507,21 +508,29 @@ class Client:
             ),
         )
 
-    def run_pipeline(self, pipeline_id: ResourceID, document: IO) -> JobResult:
+    def run_pipeline(
+        self,
+        pipeline_id: ResourceID,
+        document: Union[bytes, IO],
+        *,
+        filename: str | None = None,
+    ) -> JobResult:
         """Process a document through a pipeline.
 
         Provide the pipeline id and document as IO string or in bytes.
         """
+        document = document.read() if not isinstance(document, bytes) else document
+
         r = self._request(
             "POST",
             f"/pipelines/{pipeline_id}/run",
-            files={"document": ("_", document.read(), "application/pdf")},
+            files={"document": ("_", document, "application/pdf")},
         )
         return JobResult.from_response(r)
 
     def run_anonymous_pipeline(
         self,
-        document: IO,
+        document: Union[bytes, IO],
         code: Optional[str] = None,
         template: Optional[dict] = None,
     ) -> JobResult:
@@ -535,8 +544,10 @@ class Client:
             code = json.dumps(template)
         elif template is not None:
             raise ValueError("Only one of code or template must be provided")
+
+        document = document.read() if not isinstance(document, bytes) else document
         r = self._request(
-            "POST", "/pipelines/run", files={"document": document.read(), "code": code}
+            "POST", "/pipelines/run", files={"document": document, "code": code}
         )
         return JobResult.from_response(r)
 
@@ -585,18 +596,29 @@ class Client:
         r = self._request("GET", f"/inboxes/{inbox_id}/jobs")
         return Page[JobInfo].from_response(r)
 
-    def create_document(self, inbox_id: ResourceID, document: IO) -> UUID:
+    def create_document(
+        self,
+        inbox_id: ResourceID,
+        document: Union[bytes, IO],
+        *,
+        filename: str | None = None,
+    ) -> UUID:
         """Push document to the database."""
+        if not filename:
+            if isinstance(document, IOBase) and isinstance(
+                getattr(document, "name", None), str
+            ):
+                filename = basename(document.name)
+            else:
+                raise ValueError("Filename needs to be specified.")
+
+        datatype = MimeTypes().guess_type(filename)[0]
+        document = document.read() if not isinstance(document, bytes) else document
+
         r = self._request(
             "POST",
             f"/inboxes/{inbox_id}",
-            files={
-                "document": (
-                    os.path.basename(document.name),
-                    document.read(),
-                    "application/pdf",
-                )
-            },
+            files={"document": (filename, document, datatype)},
         )
         return UUID(r.json()["id"])
 

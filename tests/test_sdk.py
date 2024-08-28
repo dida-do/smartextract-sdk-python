@@ -370,13 +370,27 @@ def test_list_inbox_extraction(client, inbox_id, document_id, lua_pipeline_id):
 # Document Methods
 
 
-def test_create_document(client, inbox_id, document, document_name, my_email):
-    doc_id = client.create_document(inbox_id, document)
+def test_create_document(client, inbox_id, document_2, my_email):
+    doc_id = client.create_document(inbox_id, document_2)
 
     doc_info = client.get_document_info(doc_id)
     assert doc_info.id == doc_id
     assert doc_info.inbox_id == inbox_id
-    assert doc_info.name == document_name
+    assert doc_info.name == "hello-world.png"
+    assert doc_info.media_type == "image/png"
+    assert recent_time(doc_info.created_at)
+    assert doc_info.created_by == my_email
+
+
+def test_create_document_2(client, inbox_id, document, my_email):
+    doc_id = client.create_document(
+        inbox_id, document.read(), filename="smartextract.pdf"
+    )
+
+    doc_info = client.get_document_info(doc_id)
+    assert doc_info.id == doc_id
+    assert doc_info.inbox_id == inbox_id
+    assert doc_info.name == "smartextract.pdf"
     assert doc_info.media_type == "application/pdf"
     assert recent_time(doc_info.created_at)
     assert doc_info.created_by == my_email
