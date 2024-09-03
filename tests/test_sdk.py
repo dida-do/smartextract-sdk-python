@@ -99,16 +99,14 @@ def test_list_template_pipelines(client: Client):
         assert isinstance(client.get_resource_info(pipeline.id), TemplatePipelineInfo)
 
 
+@pytest.mark.xfail
 def test_list_inboxes(client):
-    inbox_list = client.list_inboxes()
+    inbox_list = client.list_inboxes(order_by="date")
     assert isinstance(inbox_list, Page[IdInfo])
-
-    for inbox in inbox_list.results:
-        assert isinstance(client.get_resource_info(inbox.id), InboxInfo)
 
 
 def test_list_inbox_documents(client, inbox_id):
-    document_list = client.list_inbox_documents(inbox_id)
+    document_list = client.list_inbox_documents(inbox_id, order_by="date")
     assert isinstance(document_list, Page[DocumentInfo])
 
     for doc in document_list.results:

@@ -9,10 +9,10 @@ import json
 from datetime import datetime, timedelta
 from enum import Enum
 from io import IOBase
-from typing import IO, TYPE_CHECKING, Any, Generic, Optional, TypeVar, Union
-from uuid import UUID
 from mimetypes import MimeTypes
 from os.path import basename
+from typing import IO, TYPE_CHECKING, Any, Generic, Optional, TypeVar, Union
+from uuid import UUID
 
 if TYPE_CHECKING:
     from typing import Self  # For Python ≤ 3.10
@@ -309,7 +309,7 @@ class Client:
 
         Allowed languages are "en" and "de"
         """
-        r = self._request("GET", f"/templates?lang={language}")
+        r = self._request("GET", "/templates", params={"lang": language})
         return [TemplateInfo(**template) for template in r.json()]
 
     # User Management
@@ -320,12 +320,22 @@ class Client:
         r2 = self._request("GET", f"/users/{user}/credits")
         return UserInfo(**r1.json(), **r2.json())
 
-    def list_user_jobs(self, user: str = "me") -> Page[JobInfo]:
+    def list_user_jobs(
+        self,
+        user: str = "me",
+        *,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> Page[JobInfo]:
         """List all a user's jobs with their duration and status.
 
         A job started whenever a document is passed throuh a pipeline.
         """
-        r = self._request("GET", f"/users/{user}/jobs")
+        r = self._request(
+            "GET",
+            f"/users/{user}/jobs",
+            params=drop_none(limit=limit, offset=offset),
+        )
         return Page[JobInfo].from_response(r)
 
     def set_user_credits(
@@ -361,7 +371,13 @@ class Client:
 
     # Resources
 
-    def list_resources(self, type: str | None = None) -> Page[IdInfo]:  # noqa: A002
+    def list_resources(
+        self,
+        type: str | None = None,  # noqa: A002
+        *,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> Page[IdInfo]:
         """List the ids of all the users resources.
 
         The user can create resources of type
@@ -371,28 +387,68 @@ class Client:
         as input to the creation methods.
 
         """
-        r = self._request("GET", "/resources", params=drop_none(type=type))
+        r = self._request(
+            "GET",
+            "/resources",
+            params=drop_none(
+                type=type,
+                limit=limit,
+                offset=offset,
+            ),
+        )
         return Page[IdInfo].from_response(r)
 
-    def list_lua_pipelines(self) -> Page[IdInfo]:
+    def list_lua_pipelines(
+        self, limit: int | None = None, offset: int | None = None
+    ) -> Page[IdInfo]:
         """List the ids of all the users lua_pipelines.
 
         Pipelines can be started with a lua script
         by using create_lua_pipeline(...)
         """
-        return self.list_resources(type="lua_pipeline")
+        return self.list_resources(type="lua_pipeline", limit=limit, offset=offset)
 
-    def list_template_pipelines(self) -> Page[IdInfo]:
+    def list_template_pipelines(
+        self, limit: int | None = None, offset: int | None = None
+    ) -> Page[IdInfo]:
         """List all created pipelines that are based on a template."""
-        return self.list_resources(type="template_pipeline")
+        return self.list_resources(type="template_pipeline", limit=limit, offset=offset)
 
-    def list_inboxes(self) -> Page[IdInfo]:
-        """List all inboxes with the attached pipeline."""
-        return self.list_resources(type="inbox")
+    def list_inboxes(
+        self,
+        *,
+        limit: int | None = None,
+        offset: int | None = None,
+        order_by: str | None = "date:desc",
+    ) -> Page[IdInfo]:
+        """List all inboxes with the attached pipeline.
 
-    def list_inbox_documents(self, inbox_id: ResourceID) -> Page[DocumentInfo]:
-        """List all documents inside an inbox."""
-        r = self._request("GET", f"/inboxes/{inbox_id}/documents")
+        order_by must be one of "id", "name", "date".
+        """
+        r = self._request(
+            "GET",
+            "/inboxes",
+            params=drop_none(limit=limit, offset=offset, order_by=order_by),
+        )
+        return Page[IdInfo].from_response(r)
+
+    def list_inbox_documents(
+        self,
+        inbox_id: ResourceID,
+        *,
+        limit: int | None = None,
+        offset: int | None = None,
+        order_by: str | None = "date:desc",
+    ) -> Page[DocumentInfo]:
+        """List all documents inside an inbox.
+
+        order_by must be one of ["id", "name", "date"]
+        """
+        r = self._request(
+            "GET",
+            f"/inboxes/{inbox_id}/documents",
+            params=drop_none(limit=limit, offset=offset, order_by=order_by),
+        )
         return Page[DocumentInfo].from_response(r)
 
     def get_resource_info(self, resource_id: ResourceID) -> ResourceInfo:
@@ -413,9 +469,19 @@ class Client:
             return InboxInfo.from_response(r)
         return ResourceInfo(**info)
 
-    def list_permissions(self, resource_id: ResourceID) -> Page[UserPermission]:
+    def list_permissions(
+        self,
+        resource_id: ResourceID,
+        *,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> Page[UserPermission]:
         """For a given resource, list all users with access rights."""
-        r = self._request("GET", f"/resources/{resource_id}/permissions")
+        r = self._request(
+            "GET",
+            f"/resources/{resource_id}/permissions",
+            params=drop_none(limit=limit, offset=offset),
+        )
         return Page[UserPermission].from_response(r)
 
     def create_permission(
@@ -551,9 +617,18 @@ class Client:
         )
         return JobResult.from_response(r)
 
-    def list_pipeline_jobs(self, pipeline_id: Optional[ResourceID]) -> Page[JobInfo]:
+    def list_pipeline_jobs(
+        self,
+        pipeline_id: Optional[ResourceID],
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> Page[JobInfo]:
         """List all pipeline runs of a pipeline."""
-        r = self._request("GET", f"/pipelines/{pipeline_id}/jobs")
+        r = self._request(
+            "GET",
+            f"/pipelines/{pipeline_id}/jobs",
+            params=drop_none(limit=limit, offset=offset),
+        )
         return Page[JobInfo].from_response(r)
 
     # Inboxes
@@ -591,9 +666,19 @@ class Client:
             ),
         )
 
-    def list_inbox_jobs(self, inbox_id: ResourceID) -> Page[JobInfo]:
+    def list_inbox_jobs(
+        self,
+        inbox_id: ResourceID,
+        *,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> Page[JobInfo]:
         """List all a inbox' pipeline runs."""
-        r = self._request("GET", f"/inboxes/{inbox_id}/jobs")
+        r = self._request(
+            "GET",
+            f"/inboxes/{inbox_id}/jobs",
+            params=drop_none(limit=limit, offset=offset),
+        )
         return Page[JobInfo].from_response(r)
 
     def create_document(
@@ -622,12 +707,22 @@ class Client:
         )
         return UUID(r.json()["id"])
 
-    def list_inbox_extraction(self, inbox_id: ResourceID) -> Page[ExtractionInfo]:
-        """List all extraction results of an inbox."""
+    def list_inbox_extraction(
+        self,
+        inbox_id: ResourceID,
+        *,
+        limit: int | None = None,
+        offset: int | None = None,
+        order_by: str | None = "date:desc",
+    ) -> Page[ExtractionInfo]:
+        """List all extraction results of an inbox.
+
+        order_by must be one of ["id", "name", "date"]
+        """
         r = self._request(
             "GET",
             f"inboxes/{inbox_id}/extractions",
-            headers={"accept": "application/json"},
+            params=drop_none(limit=limit, offset=offset, order_by=order_by),
         )
         return Page[ExtractionInfo].from_response(r)
 

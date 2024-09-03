@@ -1,6 +1,6 @@
 import os
-from uuid import UUID
 from os.path import basename
+from uuid import UUID
 
 import pytest
 
