@@ -1,6 +1,7 @@
 """The smartextract SDK allows easy access to the smartextract API.
 
-The documentation to this package can be found at https://docs.smartextract.ai/
+See https://docs.smartextract.ai/ for the user guide and package
+documentation.
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ if TYPE_CHECKING:
     from typing import Self  # For Python ≤ 3.10
 
 import httpx
-from pydantic import BaseModel, EmailStr, JsonValue
+from pydantic import BaseModel, EmailStr, Field, JsonValue
 
 __version__ = "0"
 
@@ -123,7 +124,7 @@ class JobInfo(BaseInfo):
 
 
 class UserPermission(BaseInfo):
-    """Permission level of a user to a resource."""
+    """Access permissions of a user to a resource."""
 
     user: EmailStr
     level: AccessLevel
@@ -139,44 +140,53 @@ class IdInfo(BaseInfo):
 
 
 class ResourceInfo(IdInfo):
-    """Information about a resource.
+    """Basic information about a resource."""
 
-    We designate a resource to all entities to which users have access
-    permissions, possibly an alias, etc.
-
-    It also contains and the users access rights to it,
-    and when the access was granted
-    """
-
-    type: str
-    name: str
-    private_access: AccessLevel
-    public_access: AccessLevel
-    created_at: datetime
-    created_by: EmailStr
+    type: str = Field(description="The resource type.")
+    name: str = Field(description="The resource name.")
+    private_access: AccessLevel = Field(
+        description="Access permissions of the current user."
+    )
+    public_access: AccessLevel = Field(
+        description="Access permissions granted to all smartextract users."
+    )
+    created_at: datetime = Field(
+        description="Creation date of the current revision of the resource."
+    )
+    created_by: EmailStr = Field(
+        description="User who created the current revision ofthe resource."
+    )
 
 
 class LuaPipelineInfo(ResourceInfo):
-    """Information about a lua pipeline including lua script and name."""
+    """Information about a Lua pipeline."""
 
-    code: str
+    code: str = Field(description="Lua code of the pipeline.")
 
 
 class TemplatePipelineInfo(ResourceInfo):
     """Information about a template pipeline."""
 
-    template: dict
-    ocr_id: UUID
-    chat_id: UUID
+    template: dict = Field(
+        description="The extraction template, conforming to the schema "
+        " described at https://smartextract.ai/schemas/template."
+    )
+    ocr_id: UUID = Field(description="OCR component used by the pipeline.")
+    chat_id: UUID = Field(description="LLM component used by the pipeline.")
 
 
 class TemplateInfo(BaseInfo):
     """Information about an extraction template."""
 
-    id: str  # not UUID, the format is name.language
-    name: str
-    description: str
-    categories: list
+    id: str = Field(
+        description="Template identifier, in the document_type.language form.",
+        examples=["invoice.en", "bank_statement.de"],
+    )
+    name: str = Field(description="Localized name of the template.")
+    description: str = Field(description="Localized description of the template.")
+    categories: list = Field(
+        description="List of business domains relevant to this template."
+    )
 
 
 class InboxInfo(ResourceInfo):
@@ -187,62 +197,80 @@ class InboxInfo(ResourceInfo):
     may be associated to multiple inboxes).
     """
 
-    document_count: int
-    pipeline_id: UUID
-    ocr_id: UUID
+    document_count: int = Field(description="Total number of documents in the inbox.")
+    pipeline_id: UUID = Field(
+        description="Pipeline used to process documents in the inbox."
+    )
+    ocr_id: UUID = Field(
+        description="OCR component used to search documents in the inbox."
+        " Ideally (but not necessarily) should match the OCR of the inbox pipeline."
+    )
 
 
 class DocumentInfo(BaseInfo):
-    """Information about a Document.
+    """Information about a document."""
 
-    Currently, it can be a PDF file or an image (JPEG or PNG format).
-
-    When a document is stored, it belongs to an inbox and is identified by a UUID.
-    """
-
-    id: UUID
-    inbox_id: UUID
-    name: str
-    media_type: str
-    created_at: datetime
-    created_by: EmailStr
+    id: UUID = Field(description="The document ID number.")
+    inbox_id: UUID = Field(description="The inbox containing the document.")
+    name: str = Field(description="The document file name.")
+    media_type: str = Field(
+        description="The type of document",
+        examples=["application/pdf", "image/jpeg"],
+    )
+    created_at: datetime = Field(
+        description="Creation date of the current version of the doucment."
+    )
+    created_by: EmailStr = Field(
+        description="User who uploaded the current version of the document."
+    )
 
 
 class ExtractionInfo(BaseInfo):
-    """Result of a document extraction.
+    """Result of a document extraction."""
 
-    The result contains the document's content in the desired template format,
-    or it contains the lua script's output.
-    """
-
-    document_id: UUID
-    document_name: str
-    pipeline_id: UUID
-    created_at: datetime
-    created_by: EmailStr
-    result: JsonValue
+    document_id: UUID = Field(description="The document ID number.")
+    document_name: str = Field(description="The document file name.")
+    pipeline_id: UUID = Field(description="Pipeline used to compute the extraction")
+    created_at: datetime = Field(description="Date when the extraction was computed.")
+    created_by: EmailStr = Field(
+        description="User responsible for triggering the extraction compuattion."
+    )
+    result: JsonValue = Field(
+        description="Extracted information; the data schema depends on the pipeline."
+    )
 
 
 class JobResult(BaseInfo):
     """Result of a pipeline run."""
 
-    result: JsonValue
-    error: Optional[str] = None
-    log: Optional[list[str]] = None
+    result: JsonValue = Field(
+        description="Result of the pipeline run;"
+        " the data schema depends on the pipeline."
+    )
+    error: Optional[str] = Field(
+        default=None,
+        description="Error message, or null if the run was successful.",
+    )
+    log: Optional[list[str]] = Field(
+        default=None,
+        description="List of log messages emmited by the pipeline, if any.",
+    )
 
 
 InfoT = TypeVar("InfoT", bound=BaseInfo)
 
 
 class Page(BaseInfo, Generic[InfoT]):
-    """Abstract Class used to contain a list of information.
+    """Abstract Class used to contain a list of information."""
 
-    The "results" list can be a selected subset of all resources.
-    Nevertheless "count" displays the actual number of resources
-    """
-
-    count: int
-    results: list[InfoT]
+    count: int = Field(
+        description="Total number of matches of the query,"
+        " potentially more than the returned results."
+    )
+    results: list[InfoT] = Field(
+        description="Sorted list of results matching the search filters,"
+        " including limit and offset."
+    )
 
 
 class ClientError(Exception):
@@ -260,7 +288,7 @@ def drop_none(**kwargs) -> dict[str, Any]:
 
 
 def _get_jwt_token(base_url, username, password) -> str:
-    """Obtain jwt access token by providing username and passowrd."""
+    """Obtain a temporary JWT access token."""
     r = httpx.post(
         f"{base_url}/auth/jwt/login",
         data={"username": username, "password": password},
@@ -282,7 +310,7 @@ class Client:
         timeout: Union[None, float, httpx.Timeout] = DEFAULT_TIMEOUT,
         _transport: httpx.BaseTransport | None = None,
     ):
-        """Initialize the Client using either your API key or username and passwort."""
+        """Initialize the Client using either an API key or username and password."""
         if api_key is None:
             if not username:
                 raise ValueError(
