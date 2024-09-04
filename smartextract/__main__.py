@@ -102,6 +102,14 @@ def subcommand(name, *, group, **kwargs):
     return subcmd
 
 
+optional_user_arg = dict(  # noqa: C408
+    nargs="?",
+    default="me",
+    help="email or ID of the user (yourself if omitted)",
+)
+
+## Authentication
+
 get_api_key = subcommand(
     "get-api-key",
     group="Authentication and user management",
@@ -140,7 +148,7 @@ get_user_info = subcommand(
     group="Authentication and user management",
     description="Display information about a user.",
 )
-get_user_info.add_argument("--username", "-u", nargs="?", help="Email of the user")
+get_user_info.add_argument("username", **optional_user_arg)
 
 
 @handler(get_user_info)
@@ -153,13 +161,10 @@ set_user_credits = subcommand(
     group="Authentication and user management",
     description="Add credits to a user's balance.",
 )
-set_user_credits.add_argument("username", help="Email of the user")
-set_user_credits.add_argument("--balance", "-b", nargs="?", help="Set a new balance.")
+set_user_credits.add_argument("username", help="email or ID of the user")
+set_user_credits.add_argument("--balance", "-b", help="set a new balance")
 set_user_credits.add_argument(
-    "-c",
-    "--new-credits",
-    nargs="?",
-    help="Add credits to current balance.",
+    "-c", "--new-credits", help="add credits to current balance"
 )
 
 
@@ -172,18 +177,16 @@ def _(client: Client, args: argparse.Namespace):
 
 
 list_user_jobs = subcommand(
-    "list-jobs",
+    "list-user-jobs",
     group="Authentication and user management",
-    description="List all pipeline runs.",
+    description="List all pipeline runs triggered by user.",
 )
-list_user_jobs.add_argument(
-    "--username", "-u", nargs="?", help="List jobs of this user."
-)
+list_user_jobs.add_argument("username", **optional_user_arg)
 
 
 @handler(list_user_jobs)
 def _(client: Client, args: argparse.Namespace):
-    print_obj(client.list_user_jobs(args.username or "me"))
+    print_obj(client.list_user_jobs(args.username))
 
 
 ## Resource management
