@@ -16,6 +16,7 @@ from smartextract import (
     DEFAULT_TIMEOUT,
     Client,
     ClientError,
+    Language,
     _get_jwt_token,
 )
 
@@ -136,7 +137,7 @@ list_templates.add_argument(
     "-l",
     "--lang",
     metavar="LANG",
-    choices=["en", "de"],
+    choices=Language.__args__,  # type: ignore[attr-defined]
     default="en",
     help="the template language, as a 2-character code (default: en)",
 )
@@ -647,7 +648,7 @@ def main():
 
     # Dispatch subcommand
     timeout = args.timeout if args.timeout > 0 else None
-    client = Client(api_key=api_key, timeout=timeout)
+    client = Client(api_key=api_key, timeout=timeout, base_url=args.base_url)
     args.handler(client, args)
 
 

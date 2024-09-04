@@ -12,7 +12,7 @@ from enum import Enum
 from io import IOBase
 from mimetypes import MimeTypes
 from os.path import basename
-from typing import IO, TYPE_CHECKING, Any, Generic, Optional, TypeVar, Union
+from typing import IO, TYPE_CHECKING, Any, Generic, Literal, Optional, TypeVar, Union
 from uuid import UUID
 
 if TYPE_CHECKING:
@@ -26,6 +26,7 @@ __version__ = "0"
 DEFAULT_BASE_URL = "https://api.smartextract.ai"
 DEFAULT_TIMEOUT = 600  # seconds
 
+Language = Literal["de", "en"]
 ResourceID = Union[str, UUID]
 
 
@@ -332,11 +333,8 @@ class Client:
             raise ClientError.from_response(r)
         return r
 
-    def list_templates(self, language: str = "en") -> list[TemplateInfo]:
-        """List all available templates in format name.language.
-
-        Allowed languages are "en" and "de"
-        """
+    def list_templates(self, language: Language = "en") -> list[TemplateInfo]:
+        """List all available templates in format name.language."""
         r = self._request("GET", "/templates", params={"lang": language})
         return [TemplateInfo(**template) for template in r.json()]
 
