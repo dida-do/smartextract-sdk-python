@@ -26,6 +26,13 @@ __version__ = "0"
 DEFAULT_BASE_URL = "https://api.smartextract.ai"
 DEFAULT_TIMEOUT = 600  # seconds
 
+Document = Union[str, bytes, IO[bytes]]
+"""Types accepted as a document.
+
+This can be either the document content itself (as a string or bytes)
+or an open file in binary reading mode.
+"""
+
 Language = Literal["de", "en"]
 ResourceID = Union[str, UUID]
 
@@ -297,6 +304,22 @@ def _get_jwt_token(base_url, username, password) -> str:
     if not r.is_success:
         raise ClientError.from_response(r)
     return r.json()["access_token"]
+
+
+def _guess_filename(document: Document) -> str | None:
+    name = isinstance(document, IOBase) and getattr(document, "name", None)
+    if not isinstance(name, str):
+        return None
+    return basename(name)
+
+
+def _guess_media_type(filename: str | None = None) -> str | None:
+    if filename is None:
+        return None
+    media_type, enc = MimeTypes().guess_type(filename)
+    if enc is not None:
+        raise ValueError(f"Encoded file ({enc}) is not supported.")
+    return media_type
 
 
 class Client:
@@ -603,43 +626,79 @@ class Client:
     def run_pipeline(
         self,
         pipeline_id: ResourceID,
-        document: Union[bytes, IO],
+        document: Document,
         *,
-        filename: str | None = None,
+        media_type: str | None = None,
     ) -> JobResult:
-        """Process a document through a pipeline.
+        """Process a document through an existing pipeline.
 
-        Provide the pipeline id and document as IO string or in bytes.
+        With this method, it is not necessary to upload the document
+        to an inbox.  The document and the resulting extraction are
+        not persisted in the smartextract servers.
+
+        This method waits for the processing to complete and directly
+        returns the extracted data.
+
+        Arguments:
+          pipeline_id: The processing pipeline to use.
+          document: The document to be processed, as a string, bytes,
+            or a file in binary reading mode.
+          media_type: The document media type, only required when it
+            is not possible to guess.
         """
-        document = document.read() if not isinstance(document, bytes) else document
-
+        filename = _guess_filename(document) or "document"
+        media_type = media_type or _guess_media_type(filename)
         r = self._request(
             "POST",
             f"/pipelines/{pipeline_id}/run",
-            files={"document": ("_", document, "application/pdf")},
+            files={"document": (filename, document, media_type)},
         )
         return JobResult.from_response(r)
 
     def run_anonymous_pipeline(
         self,
-        document: Union[bytes, IO],
-        code: Optional[str] = None,
-        template: Optional[dict] = None,
+        document: Document,
+        *,
+        code: str | None = None,
+        template: dict | None = None,
+        media_type: str | None = None,
     ) -> JobResult:
-        """Run document through pipeline without creating an inbox.
+        """Process a document without permanently creating a pipeline.
 
-        A lua script (code) or a yaml-file (template) must be provided.
+        This is useful for debugging.  Either Lua code or an
+        extraction template (but not both) need to be provided.
+
+        As with `run_pipeline`, the document and the resulting
+        extraction are not persisted in the smartextract servers.
+
+        Arguments:
+          document: The document to be processed, as a string, bytes,
+            or a file in binary reading mode.
+          code: A Lua script, as a string.
+          template: An extraction template as a dictionary following
+            the schema at https://smartextract.ai/schemas/template.
+          media_type: The document media type, only required when it
+            is not possible to guess.
         """
         if code is None:
             if template is None:
                 raise ValueError("Either code or template must be provided")
             code = json.dumps(template)
-        elif template is not None:
+            code_type = "application/json"
+        elif template is None:
+            code_type = "text/lua"
+        else:
             raise ValueError("Only one of code or template must be provided")
 
-        document = document.read() if not isinstance(document, bytes) else document
+        filename = _guess_filename(document) or "document"
+        media_type = media_type or _guess_media_type(filename)
         r = self._request(
-            "POST", "/pipelines/run", files={"document": document, "code": code}
+            "POST",
+            "/pipelines/run",
+            files={
+                "document": (filename, document, media_type),
+                "code": ("code", code, code_type),
+            },
         )
         return JobResult.from_response(r)
 
@@ -710,26 +769,38 @@ class Client:
     def create_document(
         self,
         inbox_id: ResourceID,
-        document: Union[bytes, IO],
+        document: Document,
         *,
         filename: str | None = None,
+        media_type: str | None = None,
     ) -> UUID:
-        """Push document to the database."""
-        if not filename:
-            if isinstance(document, IOBase) and isinstance(
-                getattr(document, "name", None), str
-            ):
-                filename = basename(document.name)
-            else:
-                raise ValueError("Filename needs to be specified.")
+        """Add a new document to an existing inbox.
 
-        datatype = MimeTypes().guess_type(filename)[0]
-        document = document.read() if not isinstance(document, bytes) else document
+        Return the ID of the newly created document.
+
+        Arguments:
+          inbox_id: The inbox in which to add a document.
+          document: The contents of new document, as a string, bytes,
+            or a file in binary reading mode.
+          filename: The new document's name.  This can be omitted if
+            `document` is a file, in which case the file's name is
+            used.
+          media_type: The new document's type.  This can be omitted if
+            the type can be deduced from the file name.
+        """
+        filename = filename or _guess_filename(document)
+        if not filename:
+            raise ValueError("File name needs to be specified.")
+
+        if not media_type:
+            media_type, enc = MimeTypes().guess_type(filename)
+            if enc is not None:
+                raise ValueError(f"Encoded file ({enc}) is not supported.")
 
         r = self._request(
             "POST",
             f"/inboxes/{inbox_id}",
-            files={"document": (filename, document, datatype)},
+            files={"document": (filename, document, media_type)},
         )
         return UUID(r.json()["id"])
 
