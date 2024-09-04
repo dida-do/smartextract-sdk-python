@@ -41,7 +41,16 @@ def do_login(base_url, username) -> str:
     if not username:
         if not sys.stdin.isatty():
             raise SystemExit("error: no username or API key provided")
-        username = input("Username: ")
+        # Read username, writing prompt to TTY if possible and to
+        # stderr as a fallback, so this works well inside shell
+        # command substitutions.
+        prompt = "Username: "
+        try:
+            with open("/dev/tty", "w") as tty:
+                tty.write(prompt)
+        except Exception:
+            print(prompt, end="", file=sys.stderr, flush=True)
+        username = sys.stdin.readline().strip()
     password = getpass() if sys.stdin.isatty() else sys.stdin.readline().strip()
     try:
         return _get_jwt_token(base_url, username, password)
