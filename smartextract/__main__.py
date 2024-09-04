@@ -36,28 +36,6 @@ def print_obj(v: Any):
     print(json.dumps(v, indent=2))
 
 
-def do_login(base_url, username) -> str:
-    """Retrieve access token based on username and password."""
-    if not username:
-        if not sys.stdin.isatty():
-            raise SystemExit("error: no username or API key provided")
-        # Read username, writing prompt to TTY if possible and to
-        # stderr as a fallback, so this works well inside shell
-        # command substitutions.
-        prompt = "Username: "
-        try:
-            with open("/dev/tty", "w") as tty:
-                tty.write(prompt)
-        except Exception:
-            print(prompt, end="", file=sys.stderr, flush=True)
-        username = sys.stdin.readline().strip()
-    password = getpass() if sys.stdin.isatty() else sys.stdin.readline().strip()
-    try:
-        return _get_jwt_token(base_url, username, password)
-    except ClientError as e:
-        raise SystemExit(f"error logging in: {e.args[0]}") from e
-
-
 cli = argparse.ArgumentParser(
     description="Make requests to the smartextract API.",
     formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -110,8 +88,36 @@ optional_user_arg = dict(  # noqa: C408
 
 ## Authentication
 
+
+def do_login(base_url, username) -> str:
+    """Retrieve access token based on username and password.
+
+    If a username is not given, read it interactively (but only if on
+    a TTY).  Read the password interactively when on a TTY, or from
+    stdin otherwise.
+    """
+    if not username:
+        if not sys.stdin.isatty():
+            raise SystemExit("error: no username or API key provided")
+        # Read username, writing prompt to TTY if possible and to
+        # stderr as a fallback, so this works well inside shell
+        # command substitutions.
+        prompt = "Username: "
+        try:
+            with open("/dev/tty", "w") as tty:
+                tty.write(prompt)
+        except Exception:
+            print(prompt, end="", file=sys.stderr, flush=True)
+        username = sys.stdin.readline().strip()
+    password = getpass() if sys.stdin.isatty() else sys.stdin.readline().strip()
+    try:
+        return _get_jwt_token(base_url, username, password)
+    except ClientError as e:
+        raise SystemExit(f"error logging in: {e.args[0]}") from e
+
+
 get_api_key = subcommand(
-    "get-api-key",
+    "login",
     group="Authentication and user management",
     description="Print a temporary API key.",
 )
