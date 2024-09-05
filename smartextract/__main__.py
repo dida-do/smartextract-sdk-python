@@ -14,21 +14,13 @@ from pydantic import TypeAdapter
 from smartextract import (
     DEFAULT_BASE_URL,
     DEFAULT_TIMEOUT,
+    AccessLevel,
     Client,
     ClientError,
     Language,
     _get_jwt_token,
+    drop_none,
 )
-
-
-def handler(subcommand: argparse.ArgumentParser):
-    """Define a handler for a subcommand."""
-
-    def register(f: Callable[[Client, argparse.Namespace], None]):
-        subcommand.set_defaults(handler=f)
-        return f
-
-    return register
 
 
 def print_obj(v: Any):
@@ -65,23 +57,30 @@ subcommands = cli.add_subparsers(
     metavar="command",
     help="one of the subcommands listed below",
 )
-subcommand_groups = {}
+subcommand_groups: dict[str, dict[str, argparse.ArgumentParser]] = {}
 
 
-def subcommand(name, *, group, **kwargs):
+def subcommand(
+    name: str,
+    *,
+    group: str,
+    handler: Callable[[Client, argparse.Namespace], None],
+    **kwargs,
+) -> argparse.ArgumentParser:
     """Define a subcommand."""
     subcmd = subcommands.add_parser(
         name,
         formatter_class=argparse.RawDescriptionHelpFormatter,
         **kwargs,
     )
+    subcmd.set_defaults(handler=handler)
     if group not in subcommand_groups:
         subcommand_groups[group] = {}
     subcommand_groups[group][name] = subcmd
     return subcmd
 
 
-optional_user_arg = dict(  # noqa: C408
+optional_user_arg = drop_none(
     nargs="?",
     default="me",
     help="email or ID of the user (yourself if omitted)",
@@ -90,7 +89,7 @@ optional_user_arg = dict(  # noqa: C408
 ## Authentication
 
 
-def do_login(base_url, username) -> str:
+def do_login(base_url: str, username: str) -> str:
     """Retrieve access token based on username and password.
 
     If a username is not given, read it interactively (but only if on
@@ -117,21 +116,24 @@ def do_login(base_url, username) -> str:
         raise SystemExit(f"error logging in: {e.args[0]}") from e
 
 
-get_api_key = subcommand(
+login = subcommand(
     "login",
     group="Authentication and user management",
     description="Print a temporary API key.",
+    # Subcommand handled as a special case, hence the type mismatch.
+    handler=do_login,  # type: ignore[arg-type]
 )
-get_api_key.add_argument(
+login.add_argument(
     "username",
     nargs="?",
-    help="user's email (if omitted, ask interactively or read from stdin)",
+    help="user's email (if omitted, ask interactively)",
 )
-get_api_key.set_defaults(handler=do_login)
 
-list_templates = subcommands.add_parser(
+list_templates = subcommand(
     "list-templates",
+    group="Pipelines",
     description="List all templates available for extractions pipelines.",
+    handler=lambda client, args: print_obj(client.list_templates(args.lang)),
 )
 list_templates.add_argument(
     "-l",
@@ -143,23 +145,22 @@ list_templates.add_argument(
 )
 
 
-@handler(list_templates)
-def _(client: Client, args: argparse.Namespace):
-    print_obj(client.list_templates(args.lang))
-
-
 ## User Management
 
 get_user_info = subcommand(
     "get-user-info",
     group="Authentication and user management",
     description="Display information about a user.",
+    handler=lambda client, args: print_obj(client.get_user_info(args.username)),
 )
 get_user_info.add_argument("username", **optional_user_arg)
 
 
-@handler(get_user_info)
-def _(client: Client, args: argparse.Namespace):
+def do_set_user_credits(client: Client, args: argparse.Namespace):
+    """Call client.set_user_credits and display user info."""
+    client.set_user_credits(
+        args.username, new_credits=args.new_credits, balance=args.balance
+    )
     print_obj(client.get_user_info(args.username))
 
 
@@ -167,6 +168,7 @@ set_user_credits = subcommand(
     "set-user-credits",
     group="Authentication and user management",
     description="Add credits to a user's balance.",
+    handler=do_set_user_credits,
 )
 set_user_credits.add_argument("username", help="email or ID of the user")
 set_user_credits.add_argument("--balance", "-b", help="set a new balance")
@@ -175,25 +177,13 @@ set_user_credits.add_argument(
 )
 
 
-@handler(set_user_credits)
-def _(client: Client, args: argparse.Namespace):
-    client.set_user_credits(
-        args.username, new_credits=args.new_credits, balance=args.balance
-    )
-    print_obj(client.get_user_info(args.username))
-
-
 list_user_jobs = subcommand(
     "list-user-jobs",
     group="Authentication and user management",
     description="List all pipeline runs triggered by user.",
+    handler=lambda client, args: print_obj(client.list_user_jobs(args.username)),
 )
 list_user_jobs.add_argument("username", **optional_user_arg)
-
-
-@handler(list_user_jobs)
-def _(client: Client, args: argparse.Namespace):
-    print_obj(client.list_user_jobs(args.username))
 
 
 ## Resource management
@@ -202,6 +192,7 @@ list_resources = subcommand(
     "list-resources",
     group="Resource management",
     description="List all resources available for pipelines.",
+    handler=lambda client, args: print_obj(client.list_resources(type=args.type)),
 )
 list_resources.add_argument(
     "type",
@@ -218,17 +209,36 @@ list_resources.add_argument(
     ],
     help="Filter by resource type.",
 )
-list_lua_pipelines = subcommands.add_parser(
-    "list-lua-pipelines", description="List all lua pipelines of this user."
+
+list_lua_pipelines = subcommand(
+    "list-lua-pipelines",
+    group="Resource management",
+    description="List all lua pipelines of this user.",
+    handler=lambda client, _: print_obj(client.list_lua_pipelines()),
 )
-list_template_pipelines = subcommands.add_parser(
-    "list-template-pipelines", description="List all template pipelines of this user."
+
+
+list_template_pipelines = subcommand(
+    "list-template-pipelines",
+    group="Resource management",
+    description="List all template pipelines of this user.",
+    handler=lambda client, _: print_obj(client.list_template_pipelines()),
 )
-list_inboxes = subcommands.add_parser(
-    "list-inboxes", description="List all inboxes of this user."
+
+
+list_inboxes = subcommand(
+    "list-inboxes",
+    group="Resource management",
+    description="List all inboxes of this user.",
+    handler=lambda client, _: print_obj(client.list_inboxes()),
 )
-list_inbox_documents = subcommands.add_parser(
-    "list-inbox-documents", description="List all documents inside an inbox."
+
+
+list_inbox_documents = subcommand(
+    "list-inbox-documents",
+    group="Resource management",
+    description="List all documents inside an inbox.",
+    handler=lambda client, args: print_obj(client.list_inbox_documents(args.inbox)),
 )
 list_inbox_documents.add_argument(
     "inbox", help="Specify UUID of the inbox containing the documents."
@@ -238,6 +248,7 @@ get_resource_info = subcommand(
     "get-resource-info",
     group="Resource management",
     description="Get resource-type specific information.",
+    handler=lambda client, args: print_obj(client.get_resource_info(args.id_or_alias)),
 )
 get_resource_info.add_argument("id_or_alias", help="Resource UUID or resource alias")
 
@@ -245,6 +256,7 @@ list_permissions = subcommand(
     "list-permissions",
     group="Resource management",
     description="See which users have access to the specified resource.",
+    handler=lambda client, args: print_obj(client.list_permissions(args.id_or_alias)),
 )
 list_permissions.add_argument("id_or_alias", help="Resource UUID or resource alias")
 
@@ -252,60 +264,19 @@ list_permissions.add_argument("id_or_alias", help="Resource UUID or resource ali
 create_permission = subcommand(
     "create-permission",
     group="Resource management",
-    description="See which users have access to the specified resource.",
+    description="Grant a user permission to access a resource.",
+    handler=lambda client, args: client.create_permission(
+        args.resource, args.username, args.level
+    ),
 )
-create_permission.add_argument("id_or_alias", help="Resource UUID or resource alias")
+create_permission.add_argument("resource", help="resource ID or alias")
 create_permission.add_argument(
-    "username", nargs="?", help="Give permission to this user"
-)
-create_permission.add_argument(
-    "-l",
-    "--level",
-    nargs="?",
-    help="Permission level",
+    "level",
+    help="new access level",
     default="edit",
-    choices=["own", "edit", "view", "list", "run", "none"],
+    choices=[v.value for v in AccessLevel],
 )
-
-
-@handler(list_resources)
-def _(client: Client, args: argparse.Namespace):
-    print_obj(client.list_resources(type=args.type))
-
-
-@handler(list_lua_pipelines)
-def _(client: Client, args: argparse.Namespace):
-    print_obj(client.list_lua_pipelines())
-
-
-@handler(list_template_pipelines)
-def _(client: Client, args: argparse.Namespace):
-    print_obj(client.list_template_pipelines())
-
-
-@handler(list_inboxes)
-def _(client: Client, args: argparse.Namespace):
-    print_obj(client.list_inboxes())
-
-
-@handler(list_inbox_documents)
-def _(client: Client, args: argparse.Namespace):
-    print_obj(client.list_inbox_documents(args.inbox))
-
-
-@handler(get_resource_info)
-def _(client: Client, args: argparse.Namespace):
-    print_obj(client.get_resource_info(args.id_or_alias))
-
-
-@handler(list_permissions)
-def _(client: Client, args: argparse.Namespace):
-    print_obj(client.list_permissions(args.id_or_alias))
-
-
-@handler(create_permission)
-def _(client: Client, args: argparse.Namespace):
-    client.create_permission(args.id_or_alias, args.username, args.level)
+create_permission.add_argument("username", help="user to be granted new permissions")
 
 
 ## Pipelines
@@ -315,6 +286,9 @@ create_lua_pipeline = subcommand(
     "create-lua-pipeline",
     group="Pipelines",
     description="Create an extraction pipeline based on a Lua script.",
+    handler=lambda client, args: print_obj(
+        client.create_lua_pipeline(args.name, args.script.read())
+    ),
 )
 create_lua_pipeline.add_argument(
     "-n", "--name", default="Lua pipeline", help="name of the new pipeline"
@@ -322,11 +296,6 @@ create_lua_pipeline.add_argument(
 create_lua_pipeline.add_argument(
     "script", help="path of the Lua script", type=argparse.FileType("r")
 )
-
-
-@handler(create_lua_pipeline)
-def _(client: Client, args: argparse.Namespace):
-    print_obj(client.create_lua_pipeline(args.name, args.script.read()))
 
 
 def cli_template(template: str) -> str | dict:
@@ -342,6 +311,14 @@ create_template_pipeline = subcommand(
     "create-template-pipeline",
     group="Pipelines",
     description="Create an extraction pipeline based on a template.",
+    handler=lambda client, args: print_obj(
+        client.create_template_pipeline(
+            args.name,
+            args.template,
+            ocr_id=args.ocr,
+            chat_id=args.chat,
+        )
+    ),
 )
 create_template_pipeline.add_argument(
     "-n", "--name", default="Template pipeline", help="name of the new pipeline"
@@ -355,18 +332,6 @@ create_template_pipeline.add_argument("--ocr", help="ID or alias of OCR resource
 create_template_pipeline.add_argument("--chat", help="ID or alias of chat resource")
 
 
-@handler(create_template_pipeline)
-def _(client: Client, args: argparse.Namespace):
-    print_obj(
-        client.create_template_pipeline(
-            args.name,
-            args.template,
-            ocr_id=args.ocr,
-            chat_id=args.chat,
-        )
-    )
-
-
 modify_pipeline = subcommand(
     "modify-pipeline",
     group="Pipelines",
@@ -375,6 +340,14 @@ Change some details of the pipeline.
 
 Any details not provided as a switch are left unchanged.
 """,
+    handler=lambda client, args: client.modify_pipeline(
+        pipeline_id=args.pipeline,
+        name=args.name,
+        code=args.script and args.script.read(),
+        template=args.template,
+        ocr_id=args.ocr or None,
+        chat_id=args.chat or None,
+    ),
 )
 modify_pipeline.add_argument(
     "pipeline", help="ID or alias of the pipeline to be changed."
@@ -392,22 +365,13 @@ modify_pipeline.add_argument("--ocr", help="ID or alias of OCR resource")
 modify_pipeline.add_argument("--chat", help="ID or alias of chat resource")
 
 
-@handler(modify_pipeline)
-def _(client: Client, args: argparse.Namespace):
-    client.modify_pipeline(
-        pipeline_id=args.pipeline,
-        name=args.name,
-        code=args.script and args.script.read(),
-        template=args.template,
-        ocr_id=args.ocr or None,
-        chat_id=args.chat or None,
-    )
-
-
 run_pipeline = subcommand(
     "run-pipeline",
     group="Pipelines",
     description="Run a pipeline, returning extraction data.",
+    handler=lambda client, args: print_obj(
+        client.run_pipeline(args.pipeline, args.document)
+    ),
 )
 run_pipeline.add_argument("pipeline", help="ID or alias of pipeline")
 run_pipeline.add_argument(
@@ -415,15 +379,17 @@ run_pipeline.add_argument(
 )
 
 
-@handler(run_pipeline)
-def _(client: Client, args: argparse.Namespace):
-    print_obj(client.run_pipeline(args.pipeline, args.document))
-
-
 run_anonymous_pipeline = subcommand(
     "run-anonymous-pipeline",
     group="Pipelines",
     description="Process document with a Lua script or extraction template.",
+    handler=lambda client, args: print_obj(
+        client.run_anonymous_pipeline(
+            document=args.document,
+            code=args.script and args.script.read(),
+            template=args.template,
+        )
+    ),
 )
 run_anonymous_pipeline.add_argument(
     "document", type=argparse.FileType("rb"), help="path of document to be processed"
@@ -439,26 +405,13 @@ run_anonymous_pipeline.add_argument(
 )
 
 
-@handler(run_anonymous_pipeline)
-def _(client: Client, args: argparse.Namespace):
-    print_obj(
-        client.run_anonymous_pipeline(
-            document=args.document,
-            code=args.script and args.script.read(),
-            template=args.template,
-        )
-    )
-
-
 list_pipeline_jobs = subcommand(
-    "list-pipeline-jobs", group="Pipelines", description="List all pipeline runs."
+    "list-pipeline-jobs",
+    group="Pipelines",
+    description="List all pipeline runs.",
+    handler=lambda client, args: print_obj(client.list_pipeline_jobs(args.pipeline)),
 )
 list_pipeline_jobs.add_argument("pipeline", help="ID or alias of pipeline")
-
-
-@handler(list_pipeline_jobs)
-def _(client: Client, args: argparse.Namespace):
-    print_obj(client.list_pipeline_jobs(args.pipeline))
 
 
 ## Inboxes
@@ -466,17 +419,14 @@ def _(client: Client, args: argparse.Namespace):
 create_inbox = subcommand(
     "create-inbox",
     group="Inboxes",
-    description="""Create inbox to to store document extractions,
-generated by a given extraction pipeline.""",
+    description="Create an inbox to store and process documents.",
+    handler=lambda client, args: print_obj(
+        client.create_inbox(args.name, args.pipeline, ocr_id=args.ocr)
+    ),
 )
 create_inbox.add_argument("name", help="Name of the inbox.")
 create_inbox.add_argument("pipeline", help="ID or alias of the extraction pipeline")
 create_inbox.add_argument("--ocr", help="OCR used for document display in the web UI")
-
-
-@handler(create_inbox)
-def _(client: Client, args: argparse.Namespace):
-    print_obj(client.create_inbox(args.name, args.pipeline, ocr_id=args.ocr))
 
 
 modify_inbox = subcommand(
@@ -488,6 +438,12 @@ Change some details of the inbox.
 Existing extractions of inbox documents are not automatically
 recomputed.
 """,
+    handler=lambda client, args: client.modify_inbox(
+        args.inbox,
+        name=args.name,
+        ocr_id=args.ocr,
+        pipeline_id=args.pipeline,
+    ),
 )
 modify_inbox.add_argument("inbox", help="ID of the inbox")
 modify_inbox.add_argument("--name", help="New name of the inbox")
@@ -495,31 +451,22 @@ modify_inbox.add_argument("--pipeline", help="ID of the extraction pipeline")
 modify_inbox.add_argument("--ocr", help="OCR used in document display in frontend.")
 
 
-@handler(modify_inbox)
-def _(client: Client, args: argparse.Namespace):
-    client.modify_inbox(
-        args.inbox,
-        name=args.name,
-        ocr_id=args.ocr,
-        pipeline_id=args.pipeline,
-    )
-
-
 list_inbox_jobs = subcommand(
     "list-inbox-jobs",
     group="Inboxes",
     description="List all pipeline jobs of a given inbox.",
+    handler=lambda client, args: print_obj(client.list_inbox_jobs(args.inbox)),
 )
 list_inbox_jobs.add_argument("inbox", help="ID of the inbox.")
 
 
-@handler(list_inbox_jobs)
-def _(client: Client, args: argparse.Namespace):
-    print_obj(client.list_inbox_jobs(args.inbox))
-
-
 create_document = subcommand(
-    "create-document", group="Inboxes", description="Upload document to inbox."
+    "create-document",
+    group="Inboxes",
+    description="Upload document to inbox.",
+    handler=lambda client, args: print_obj(
+        client.create_document(args.inbox, args.document)
+    ),
 )
 create_document.add_argument("inbox", help="ID of the inbox")
 create_document.add_argument(
@@ -529,22 +476,13 @@ create_document.add_argument(
 )
 
 
-@handler(create_document)
-def _(client: Client, args: argparse.Namespace):
-    print_obj(client.create_document(args.inbox, args.document))
-
-
 list_inbox_extraction = subcommand(
     "list-inbox-extraction",
     group="Inboxes",
     description="List all extraction results of an inbox.",
+    handler=lambda client, args: print_obj(client.list_inbox_extraction(args.inbox)),
 )
 list_inbox_extraction.add_argument("inbox", help="ID of the inbox")
-
-
-@handler(list_inbox_extraction)
-def _(client: Client, args: argparse.Namespace):
-    print_obj(client.list_inbox_extraction(args.inbox))
 
 
 ## Documents
@@ -553,32 +491,27 @@ get_document_info = subcommand(
     "get-document-info",
     group="Documents",
     description="Get information about a stored document.",
+    handler=lambda client, args: print_obj(client.get_document_info(args.document)),
 )
 get_document_info.add_argument("document", help="ID of the document")
-
-
-@handler(get_document_info)
-def _(client: Client, args: argparse.Namespace):
-    print_obj(client.get_document_info(args.document))
 
 
 delete_document = subcommand(
     "delete-document",
     group="Documents",
     description="Delete document from database.",
+    handler=lambda client, args: client.delete_document(args.document),
 )
 delete_document.add_argument("document", help="ID of the document")
-
-
-@handler(delete_document)
-def _(client: Client, args: argparse.Namespace):
-    client.delete_document(args.document)
 
 
 get_document_bytes = subcommand(
     "get-document-bytes",
     group="Documents",
     description="Download the document itself.",
+    handler=lambda client, args: args.output.write(
+        client.get_document_bytes(args.document)
+    ),
 )
 get_document_bytes.add_argument("document", help="ID of the document")
 get_document_bytes.add_argument(
@@ -590,38 +523,31 @@ get_document_bytes.add_argument(
 )
 
 
-@handler(get_document_bytes)
-def _(client: Client, args: argparse.Namespace):
-    args.output.write(client.get_document_bytes(args.document))
-
-
 get_document_extraction = subcommand(
     "get-document-extraction",
     group="Documents",
     description="Get document extraction.",
+    handler=lambda client, args: print_obj(
+        client.get_document_extraction(args.document)
+    ),
 )
 get_document_extraction.add_argument("document", help="ID of the document")
-
-
-@handler(get_document_extraction)
-def _(client: Client, args: argparse.Namespace):
-    print_obj(client.get_document_extraction(args.document))
 
 
 ## Final considerations
 
 # Construct epilog message
-_: list = []  # type: ignore[no-redef]
+epilog: list[str] = []
 for name, subcmds in subcommand_groups.items():
     if name:
-        _.append("")
-    _.append(f"{name}:")
+        epilog.append("")
+    epilog.append(f"{name}:")
     for name, subcmd in subcmds.items():
-        descr = subcmd.description
+        descr = subcmd.description or ""
         if "\n" in descr:
             descr = descr[: descr.index("\n")]
-        _.append(f"  {name:<24}  {descr}")
-cli.epilog = "\n".join(_)
+        epilog.append(f"  {name:<24}  {descr}")
+cli.epilog = "\n".join(epilog)
 
 
 def main():
@@ -638,7 +564,7 @@ def main():
     logging.basicConfig()
     logging.getLogger().setLevel(log_level)
 
-    # Handle get-api-key subcommand as a special case
+    # Handle login subcommand as a special case
     if args.handler == do_login:
         print(do_login(args.base_url, args.username))
         return
