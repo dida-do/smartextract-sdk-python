@@ -1,6 +1,9 @@
 """CLI for the smartextract SDK."""
 
+from __future__ import annotations
+
 import argparse
+import io
 import json
 import logging
 import os
@@ -22,74 +25,10 @@ from smartextract import (
     drop_none,
 )
 
-
-def print_obj(v: Any):
-    """Print object content in readable format."""
-    v = TypeAdapter(Any).dump_python(v, mode="json")
-    print(json.dumps(v, indent=2))
+logger = logging.getLogger("smartextract")
 
 
-cli = argparse.ArgumentParser(
-    description="Make requests to the smartextract API.",
-    formatter_class=argparse.RawDescriptionHelpFormatter,
-)
-cli.add_argument(
-    "-v",
-    "--verbose",
-    action="count",
-    help="print more log messages",
-)
-cli.add_argument(
-    "--base-url",
-    default=DEFAULT_BASE_URL,
-    type=str,
-    help="base URL of the API",
-)
-cli.add_argument(
-    "--timeout",
-    default=DEFAULT_TIMEOUT,
-    type=int,
-    help="network timeout in seconds (0 for no timeout)",
-)
-
-subcommands = cli.add_subparsers(
-    required=True,
-    metavar="command",
-    help="one of the subcommands listed below",
-)
-subcommand_groups: dict[str, dict[str, argparse.ArgumentParser]] = {}
-
-
-def subcommand(
-    name: str,
-    *,
-    group: str,
-    handler: Callable[[Client, argparse.Namespace], None],
-    **kwargs,
-) -> argparse.ArgumentParser:
-    """Define a subcommand."""
-    subcmd = subcommands.add_parser(
-        name,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        **kwargs,
-    )
-    subcmd.set_defaults(handler=handler)
-    if group not in subcommand_groups:
-        subcommand_groups[group] = {}
-    subcommand_groups[group][name] = subcmd
-    return subcmd
-
-
-optional_user_arg = drop_none(
-    nargs="?",
-    default="me",
-    help="email or ID of the user (yourself if omitted)",
-)
-
-## Authentication
-
-
-def do_login(base_url: str, username: str) -> str:
+def get_access_token(base_url: str, username: str | None) -> str:
     """Retrieve access token based on username and password.
 
     If a username is not given, read it interactively (but only if on
@@ -116,12 +55,172 @@ def do_login(base_url: str, username: str) -> str:
         raise SystemExit(f"error logging in: {e.args[0]}") from e
 
 
+def get_client(args: argparse.Namespace) -> Client:
+    """Return a smartextract client based on CLI options."""
+    timeout = args.timeout if args.timeout > 0 else None
+    api_key = os.getenv("SMARTEXTRACT_API_KEY") or get_access_token(args.base_url, None)
+    return Client(api_key=api_key, timeout=timeout, base_url=args.base_url)
+
+
+def pygments_formatter(args: argparse.Namespace) -> str | None:
+    """Decide whether colorize output and, if so, which formatter suits the terminal."""
+    if not (args.color and args.output_file.isatty()):
+        return None
+    try:
+        import pygments
+    except ModuleNotFoundError:
+        logger.info("pygments not found, disabling color output")
+        return None
+    term, colorterm = os.getenv("TERM", ""), os.getenv("COLORTERM")
+    if colorterm == "truecolor" or "truecolor" in term:
+        return "terminal16m"
+    elif colorterm == "256color" or "256color" in term:
+        return "terminal256"
+    elif colorterm or "color" in term:
+        return "terminal"
+    return None
+
+
+def get_dumper(args: argparse.Namespace) -> Callable:
+    """Return a function to print objects with the format chosen on the CLI."""
+    stream = args.output_file
+
+    def jsonify(v: Any) -> Any:
+        return TypeAdapter(Any).dump_python(v, mode="json")
+
+    if args.output_format == "json":
+
+        def dump(v: Any):
+            json.dump(jsonify(v), stream, indent=2)
+            stream.write("\n")
+
+    elif args.output_format == "yaml":
+        try:
+            import yaml
+        except ModuleNotFoundError:
+            raise RuntimeError("YAML output requires the PyYAML package") from None
+
+        def dump(v: Any):
+            yaml.safe_dump(jsonify(v), stream, sort_keys=False)
+
+    else:
+        raise RuntimeError("Invalid output format")
+
+    # If using color output, patch dump function
+    formatter = pygments_formatter(args)
+    if formatter:
+        from pygments import highlight
+        from pygments.formatters import get_formatter_by_name
+        from pygments.lexers import get_lexer_by_name
+
+        orig_dump = dump
+        orig_stream = stream
+        stream = io.StringIO()
+
+        def dump(v: Any):
+            orig_dump(v)
+            stream.seek(0)
+            highlight(
+                stream.read(),
+                get_lexer_by_name(args.output_format),
+                get_formatter_by_name(formatter),
+                outfile=orig_stream,
+            )
+
+    return dump
+
+
+## CLI definition
+
+cli = argparse.ArgumentParser(
+    description="Make requests to the smartextract API.",
+    formatter_class=argparse.RawDescriptionHelpFormatter,
+)
+cli.add_argument(
+    "-v",
+    "--verbose",
+    action="count",
+    help="print more log messages",
+)
+cli.add_argument(
+    "--base-url",
+    default=DEFAULT_BASE_URL,
+    type=str,
+    help="base URL of the API",
+)
+cli.add_argument(
+    "--timeout",
+    default=DEFAULT_TIMEOUT,
+    type=int,
+    help="network timeout in seconds (0 for no timeout)",
+)
+cli.add_argument(
+    "--color",
+    default=True,
+    action=argparse.BooleanOptionalAction,
+    help="colorize output (requires the pygments package)",
+)
+cli.add_argument(
+    "-f",
+    "--output-format",
+    default="json",
+    choices=["json", "yaml"],
+    help="data output format (default: json)",
+)
+cli.add_argument(
+    "-o",
+    "--output-file",
+    type=argparse.FileType("w"),
+    default=sys.stdout,
+    metavar="FILE",
+    help="output file name (default: stdout)",
+)
+
+subcommands = cli.add_subparsers(
+    required=True,
+    metavar="command",
+    help="one of the commands listed below",
+)
+subcommand_groups: dict[str, dict[str, argparse.ArgumentParser]] = {}
+
+
+def subcommand(
+    name: str,
+    *,
+    group: str,
+    handler: Callable[[argparse.Namespace], None],
+    **kwargs,
+) -> argparse.ArgumentParser:
+    """Define a subcommand."""
+    subcmd = subcommands.add_parser(
+        name,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        **kwargs,
+    )
+    subcmd.set_defaults(handler=handler)
+    if group not in subcommand_groups:
+        subcommand_groups[group] = {}
+    subcommand_groups[group][name] = subcmd
+    return subcmd
+
+
+optional_user_arg = drop_none(
+    nargs="?",
+    default="me",
+    help="email or ID of the user (yourself if omitted)",
+)
+
+## Authentication
+
+
 login = subcommand(
     "login",
     group="Authentication and user management",
     description="Print a temporary API key.",
-    # Subcommand handled as a special case, hence the type mismatch.
-    handler=do_login,  # type: ignore[arg-type]
+    handler=lambda args: print(
+        get_access_token(args.base_url, args.username),
+        file=args.output_file,
+    ),
 )
 login.add_argument(
     "username",
@@ -133,7 +232,7 @@ list_templates = subcommand(
     "list-templates",
     group="Pipelines",
     description="List all templates available for extractions pipelines.",
-    handler=lambda client, args: print_obj(client.list_templates(args.lang)),
+    handler=lambda args: get_dumper(args)(get_client(args).list_templates(args.lang)),
 )
 list_templates.add_argument(
     "-l",
@@ -151,17 +250,21 @@ get_user_info = subcommand(
     "get-user-info",
     group="Authentication and user management",
     description="Display information about a user.",
-    handler=lambda client, args: print_obj(client.get_user_info(args.username)),
+    handler=lambda args: get_dumper(args)(
+        get_client(args).get_user_info(args.username)
+    ),
 )
 get_user_info.add_argument("username", **optional_user_arg)
 
 
-def do_set_user_credits(client: Client, args: argparse.Namespace):
+def do_set_user_credits(args: argparse.Namespace):
     """Call client.set_user_credits and display user info."""
+    client = get_client(args)
+    dump = get_dumper(args)
     client.set_user_credits(
         args.username, new_credits=args.new_credits, balance=args.balance
     )
-    print_obj(client.get_user_info(args.username))
+    dump(client.get_user_info(args.username))
 
 
 set_user_credits = subcommand(
@@ -181,7 +284,9 @@ list_user_jobs = subcommand(
     "list-user-jobs",
     group="Authentication and user management",
     description="List all pipeline runs triggered by user.",
-    handler=lambda client, args: print_obj(client.list_user_jobs(args.username)),
+    handler=lambda args: get_dumper(args)(
+        get_client(args).list_user_jobs(args.username)
+    ),
 )
 list_user_jobs.add_argument("username", **optional_user_arg)
 
@@ -192,7 +297,9 @@ list_resources = subcommand(
     "list-resources",
     group="Resource management",
     description="List all resources available for pipelines.",
-    handler=lambda client, args: print_obj(client.list_resources(type=args.type)),
+    handler=lambda args: get_dumper(args)(
+        get_client(args).list_resources(type=args.type)
+    ),
 )
 list_resources.add_argument(
     "type",
@@ -214,7 +321,7 @@ list_lua_pipelines = subcommand(
     "list-lua-pipelines",
     group="Resource management",
     description="List all lua pipelines of this user.",
-    handler=lambda client, _: print_obj(client.list_lua_pipelines()),
+    handler=lambda args: get_dumper(args)(get_client(args).list_lua_pipelines()),
 )
 
 
@@ -222,7 +329,7 @@ list_template_pipelines = subcommand(
     "list-template-pipelines",
     group="Resource management",
     description="List all template pipelines of this user.",
-    handler=lambda client, _: print_obj(client.list_template_pipelines()),
+    handler=lambda args: get_dumper(args)(get_client(args).list_template_pipelines()),
 )
 
 
@@ -230,7 +337,7 @@ list_inboxes = subcommand(
     "list-inboxes",
     group="Resource management",
     description="List all inboxes of this user.",
-    handler=lambda client, _: print_obj(client.list_inboxes()),
+    handler=lambda args: get_dumper(args)(get_client(args).list_inboxes()),
 )
 
 
@@ -238,7 +345,9 @@ list_inbox_documents = subcommand(
     "list-inbox-documents",
     group="Resource management",
     description="List all documents inside an inbox.",
-    handler=lambda client, args: print_obj(client.list_inbox_documents(args.inbox)),
+    handler=lambda args: get_dumper(args)(
+        get_client(args).list_inbox_documents(args.inbox)
+    ),
 )
 list_inbox_documents.add_argument(
     "inbox", help="Specify UUID of the inbox containing the documents."
@@ -248,7 +357,9 @@ get_resource_info = subcommand(
     "get-resource-info",
     group="Resource management",
     description="Get resource-type specific information.",
-    handler=lambda client, args: print_obj(client.get_resource_info(args.id_or_alias)),
+    handler=lambda args: get_dumper(args)(
+        get_client(args).get_resource_info(args.id_or_alias)
+    ),
 )
 get_resource_info.add_argument("id_or_alias", help="Resource UUID or resource alias")
 
@@ -256,7 +367,9 @@ list_permissions = subcommand(
     "list-permissions",
     group="Resource management",
     description="See which users have access to the specified resource.",
-    handler=lambda client, args: print_obj(client.list_permissions(args.id_or_alias)),
+    handler=lambda args: get_dumper(args)(
+        get_client(args).list_permissions(args.id_or_alias)
+    ),
 )
 list_permissions.add_argument("id_or_alias", help="Resource UUID or resource alias")
 
@@ -265,7 +378,7 @@ create_permission = subcommand(
     "create-permission",
     group="Resource management",
     description="Grant a user permission to access a resource.",
-    handler=lambda client, args: client.create_permission(
+    handler=lambda args: get_client(args).create_permission(
         args.resource, args.username, args.level
     ),
 )
@@ -286,8 +399,8 @@ create_lua_pipeline = subcommand(
     "create-lua-pipeline",
     group="Pipelines",
     description="Create an extraction pipeline based on a Lua script.",
-    handler=lambda client, args: print_obj(
-        client.create_lua_pipeline(args.name, args.script.read())
+    handler=lambda args: get_dumper(args)(
+        get_client(args).create_lua_pipeline(args.name, args.script.read())
     ),
 )
 create_lua_pipeline.add_argument(
@@ -311,8 +424,8 @@ create_template_pipeline = subcommand(
     "create-template-pipeline",
     group="Pipelines",
     description="Create an extraction pipeline based on a template.",
-    handler=lambda client, args: print_obj(
-        client.create_template_pipeline(
+    handler=lambda args: get_dumper(args)(
+        get_client(args).create_template_pipeline(
             args.name,
             args.template,
             ocr_id=args.ocr,
@@ -340,7 +453,7 @@ Change some details of the pipeline.
 
 Any details not provided as a switch are left unchanged.
 """,
-    handler=lambda client, args: client.modify_pipeline(
+    handler=lambda args: get_client(args).modify_pipeline(
         pipeline_id=args.pipeline,
         name=args.name,
         code=args.script and args.script.read(),
@@ -369,8 +482,8 @@ run_pipeline = subcommand(
     "run-pipeline",
     group="Pipelines",
     description="Run a pipeline, returning extraction data.",
-    handler=lambda client, args: print_obj(
-        client.run_pipeline(args.pipeline, args.document)
+    handler=lambda args: get_dumper(args)(
+        get_client(args).run_pipeline(args.pipeline, args.document)
     ),
 )
 run_pipeline.add_argument("pipeline", help="ID or alias of pipeline")
@@ -383,8 +496,8 @@ run_anonymous_pipeline = subcommand(
     "run-anonymous-pipeline",
     group="Pipelines",
     description="Process document with a Lua script or extraction template.",
-    handler=lambda client, args: print_obj(
-        client.run_anonymous_pipeline(
+    handler=lambda args: get_dumper(args)(
+        get_client(args).run_anonymous_pipeline(
             document=args.document,
             code=args.script and args.script.read(),
             template=args.template,
@@ -409,7 +522,9 @@ list_pipeline_jobs = subcommand(
     "list-pipeline-jobs",
     group="Pipelines",
     description="List all pipeline runs.",
-    handler=lambda client, args: print_obj(client.list_pipeline_jobs(args.pipeline)),
+    handler=lambda args: get_dumper(args)(
+        get_client(args).list_pipeline_jobs(args.pipeline)
+    ),
 )
 list_pipeline_jobs.add_argument("pipeline", help="ID or alias of pipeline")
 
@@ -420,8 +535,8 @@ create_inbox = subcommand(
     "create-inbox",
     group="Inboxes",
     description="Create an inbox to store and process documents.",
-    handler=lambda client, args: print_obj(
-        client.create_inbox(args.name, args.pipeline, ocr_id=args.ocr)
+    handler=lambda args: get_dumper(args)(
+        get_client(args).create_inbox(args.name, args.pipeline, ocr_id=args.ocr)
     ),
 )
 create_inbox.add_argument("name", help="Name of the inbox.")
@@ -438,7 +553,7 @@ Change some details of the inbox.
 Existing extractions of inbox documents are not automatically
 recomputed.
 """,
-    handler=lambda client, args: client.modify_inbox(
+    handler=lambda args: get_client(args).modify_inbox(
         args.inbox,
         name=args.name,
         ocr_id=args.ocr,
@@ -455,7 +570,7 @@ list_inbox_jobs = subcommand(
     "list-inbox-jobs",
     group="Inboxes",
     description="List all pipeline jobs of a given inbox.",
-    handler=lambda client, args: print_obj(client.list_inbox_jobs(args.inbox)),
+    handler=lambda args: get_dumper(args)(get_client(args).list_inbox_jobs(args.inbox)),
 )
 list_inbox_jobs.add_argument("inbox", help="ID of the inbox.")
 
@@ -464,8 +579,8 @@ create_document = subcommand(
     "create-document",
     group="Inboxes",
     description="Upload document to inbox.",
-    handler=lambda client, args: print_obj(
-        client.create_document(args.inbox, args.document)
+    handler=lambda args: get_dumper(args)(
+        get_client(args).create_document(args.inbox, args.document)
     ),
 )
 create_document.add_argument("inbox", help="ID of the inbox")
@@ -480,7 +595,9 @@ list_inbox_extraction = subcommand(
     "list-inbox-extraction",
     group="Inboxes",
     description="List all extraction results of an inbox.",
-    handler=lambda client, args: print_obj(client.list_inbox_extraction(args.inbox)),
+    handler=lambda args: get_dumper(args)(
+        get_client(args).list_inbox_extraction(args.inbox)
+    ),
 )
 list_inbox_extraction.add_argument("inbox", help="ID of the inbox")
 
@@ -491,7 +608,9 @@ get_document_info = subcommand(
     "get-document-info",
     group="Documents",
     description="Get information about a stored document.",
-    handler=lambda client, args: print_obj(client.get_document_info(args.document)),
+    handler=lambda args: get_dumper(args)(
+        get_client(args).get_document_info(args.document)
+    ),
 )
 get_document_info.add_argument("document", help="ID of the document")
 
@@ -500,7 +619,7 @@ delete_document = subcommand(
     "delete-document",
     group="Documents",
     description="Delete document from database.",
-    handler=lambda client, args: client.delete_document(args.document),
+    handler=lambda args: get_client(args).delete_document(args.document),
 )
 delete_document.add_argument("document", help="ID of the document")
 
@@ -509,26 +628,19 @@ get_document_bytes = subcommand(
     "get-document-bytes",
     group="Documents",
     description="Download the document itself.",
-    handler=lambda client, args: args.output.write(
-        client.get_document_bytes(args.document)
+    handler=lambda args: args.output_file.buffer.write(
+        get_client(args).get_document_bytes(args.document)
     ),
 )
 get_document_bytes.add_argument("document", help="ID of the document")
-get_document_bytes.add_argument(
-    "-o",
-    "--output",
-    type=argparse.FileType("wb"),
-    default=sys.stdout.buffer,
-    help="output file name (default: stdout)",
-)
 
 
 get_document_extraction = subcommand(
     "get-document-extraction",
     group="Documents",
     description="Get document extraction.",
-    handler=lambda client, args: print_obj(
-        client.get_document_extraction(args.document)
+    handler=lambda args: get_dumper(args)(
+        get_client(args).get_document_extraction(args.document)
     ),
 )
 get_document_extraction.add_argument("document", help="ID of the document")
@@ -564,18 +676,8 @@ def main():
     logging.basicConfig()
     logging.getLogger().setLevel(log_level)
 
-    # Handle login subcommand as a special case
-    if args.handler == do_login:
-        print(do_login(args.base_url, args.username))
-        return
-
-    # Get API key
-    api_key = os.getenv("SMARTEXTRACT_API_KEY") or do_login(args.base_url, None)
-
     # Dispatch subcommand
-    timeout = args.timeout if args.timeout > 0 else None
-    client = Client(api_key=api_key, timeout=timeout, base_url=args.base_url)
-    args.handler(client, args)
+    args.handler(args)
 
 
 if __name__ == "__main__":

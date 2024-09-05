@@ -28,6 +28,12 @@ dependencies = [
   "httpx>=0.25"
 ]
 
+[project.optional-dependencies]
+cli-extras = [
+  "pygments>=2.0",
+  "pyyaml>=5.1",
+]
+
 [project.urls]
 Documentation = "https://docs.smartextract.ai"
 Issues = "https://github.com/dida-do/smartextract-sdk-python/issues"
@@ -77,6 +83,9 @@ line-length = 88
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "D", "A", "N", "B", "SIM", "C4", "TID"]
+ignore = [
+  "F401", # consider using `importlib.util.find_spec` to test for availability
+]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
