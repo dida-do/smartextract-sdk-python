@@ -105,8 +105,8 @@ def test_list_inboxes(client):
     assert isinstance(inbox_list, Page[IdInfo])
 
 
-def test_list_inbox_documents(client, inbox_id):
-    document_list = client.list_inbox_documents(inbox_id, order_by="date")
+def test_list_documents(client, inbox_id):
+    document_list = client.list_documents(inbox_id, order_by="date")
     assert isinstance(document_list, Page[DocumentInfo])
 
     for doc in document_list.results:
@@ -353,8 +353,8 @@ def test_list_inbox_jobs(client, inbox_id):
         assert isinstance(job_info.duration, timedelta)
 
 
-def test_list_inbox_extraction(client, inbox_id, document_id, lua_pipeline_id):
-    inbox_extraction_list = client.list_inbox_extraction(inbox_id)
+def test_list_extractions(client, inbox_id, document_id, lua_pipeline_id):
+    inbox_extraction_list = client.list_extractions(inbox_id)
     assert isinstance(inbox_extraction_list, Page[ExtractionInfo])
 
     for extraction in inbox_extraction_list.results:

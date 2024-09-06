@@ -481,7 +481,7 @@ class Client:
         )
         return Page[IdInfo].from_response(r)
 
-    def list_inbox_documents(
+    def list_documents(
         self,
         inbox_id: ResourceID,
         *,
@@ -804,7 +804,7 @@ class Client:
         )
         return UUID(r.json()["id"])
 
-    def list_inbox_extraction(
+    def list_extractions(
         self,
         inbox_id: ResourceID,
         *,

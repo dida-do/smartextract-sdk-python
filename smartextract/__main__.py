@@ -146,12 +146,14 @@ cli.add_argument(
     "--base-url",
     default=DEFAULT_BASE_URL,
     type=str,
+    metavar="URL",
     help="base URL of the API",
 )
 cli.add_argument(
     "--timeout",
     default=DEFAULT_TIMEOUT,
     type=int,
+    metavar="SECONDS",
     help="network timeout in seconds (0 for no timeout)",
 )
 cli.add_argument(
@@ -232,22 +234,6 @@ login.add_argument(
     help="user's email (if omitted, ask interactively)",
 )
 
-list_templates = subcommand(
-    "list-templates",
-    group="Pipelines",
-    description="List all templates available for extractions pipelines.",
-    handler=lambda args: get_dumper(args)(get_client(args).list_templates(args.lang)),
-)
-list_templates.add_argument(
-    "-l",
-    "--lang",
-    metavar="LANG",
-    choices=Language.__args__,  # type: ignore[attr-defined]
-    default="en",
-    help="the template language, as a 2-character code (default: en)",
-)
-
-
 ## User Management
 
 get_user_info = subcommand(
@@ -274,7 +260,7 @@ def do_set_user_credits(args: argparse.Namespace):
 set_user_credits = subcommand(
     "set-user-credits",
     group="Authentication and user management",
-    description="Add credits to a user's balance.",
+    description="Add credits to the user's balance.",
     handler=do_set_user_credits,
 )
 set_user_credits.add_argument("username", help="email or ID of the user")
@@ -287,7 +273,7 @@ set_user_credits.add_argument(
 list_user_jobs = subcommand(
     "list-user-jobs",
     group="Authentication and user management",
-    description="List all pipeline runs triggered by user.",
+    description="List pipeline runs triggered by the user.",
     handler=lambda args: get_dumper(args)(
         get_client(args).list_user_jobs(args.username)
     ),
@@ -296,6 +282,16 @@ list_user_jobs.add_argument("username", **optional_user_arg)
 
 
 ## Resource management
+
+get_resource_info = subcommand(
+    "get-resource-info",
+    group="Resource management",
+    description="Display information about a resource.",
+    handler=lambda args: get_dumper(args)(
+        get_client(args).get_resource_info(args.id_or_alias)
+    ),
+)
+get_resource_info.add_argument("id_or_alias", help="Resource UUID or resource alias")
 
 list_resources = subcommand(
     "list-resources",
@@ -345,32 +341,10 @@ list_inboxes = subcommand(
 )
 
 
-list_inbox_documents = subcommand(
-    "list-inbox-documents",
-    group="Resource management",
-    description="List all documents inside an inbox.",
-    handler=lambda args: get_dumper(args)(
-        get_client(args).list_inbox_documents(args.inbox)
-    ),
-)
-list_inbox_documents.add_argument(
-    "inbox", help="Specify UUID of the inbox containing the documents."
-)
-
-get_resource_info = subcommand(
-    "get-resource-info",
-    group="Resource management",
-    description="Get resource-type specific information.",
-    handler=lambda args: get_dumper(args)(
-        get_client(args).get_resource_info(args.id_or_alias)
-    ),
-)
-get_resource_info.add_argument("id_or_alias", help="Resource UUID or resource alias")
-
 list_permissions = subcommand(
     "list-permissions",
     group="Resource management",
-    description="See which users have access to the specified resource.",
+    description="List users with access to the specified resource.",
     handler=lambda args: get_dumper(args)(
         get_client(args).list_permissions(args.id_or_alias)
     ),
@@ -525,12 +499,28 @@ run_anonymous_pipeline.add_argument(
 list_pipeline_jobs = subcommand(
     "list-pipeline-jobs",
     group="Pipelines",
-    description="List all pipeline runs.",
+    description="List pipeline runs.",
     handler=lambda args: get_dumper(args)(
         get_client(args).list_pipeline_jobs(args.pipeline)
     ),
 )
 list_pipeline_jobs.add_argument("pipeline", help="ID or alias of pipeline")
+
+
+list_templates = subcommand(
+    "list-templates",
+    group="Pipelines",
+    description="List predefined extraction templates.",
+    handler=lambda args: get_dumper(args)(get_client(args).list_templates(args.lang)),
+)
+list_templates.add_argument(
+    "-l",
+    "--lang",
+    metavar="LANG",
+    choices=Language.__args__,  # type: ignore[attr-defined]
+    default="en",
+    help="the template language, as a 2-character code (default: en)",
+)
 
 
 ## Inboxes
@@ -570,19 +560,10 @@ modify_inbox.add_argument("--pipeline", help="ID of the extraction pipeline")
 modify_inbox.add_argument("--ocr", help="OCR used in document display in frontend.")
 
 
-list_inbox_jobs = subcommand(
-    "list-inbox-jobs",
-    group="Inboxes",
-    description="List all pipeline jobs of a given inbox.",
-    handler=lambda args: get_dumper(args)(get_client(args).list_inbox_jobs(args.inbox)),
-)
-list_inbox_jobs.add_argument("inbox", help="ID of the inbox.")
-
-
 create_document = subcommand(
     "create-document",
     group="Inboxes",
-    description="Upload document to inbox.",
+    description="Upload a document to the inbox.",
     handler=lambda args: get_dumper(args)(
         get_client(args).create_document(args.inbox, args.document)
     ),
@@ -595,15 +576,35 @@ create_document.add_argument(
 )
 
 
-list_inbox_extraction = subcommand(
-    "list-inbox-extraction",
+list_documents = subcommand(
+    "list-documents",
     group="Inboxes",
-    description="List all extraction results of an inbox.",
+    description="List documents in the inbox.",
+    handler=lambda args: get_dumper(args)(get_client(args).list_documents(args.inbox)),
+)
+list_documents.add_argument(
+    "inbox", help="Specify UUID of the inbox containing the documents."
+)
+
+
+list_extractions = subcommand(
+    "list-extractions",
+    group="Inboxes",
+    description="Retrieve extraction results in batches.",
     handler=lambda args: get_dumper(args)(
-        get_client(args).list_inbox_extraction(args.inbox)
+        get_client(args).list_extractions(args.inbox)
     ),
 )
-list_inbox_extraction.add_argument("inbox", help="ID of the inbox")
+list_extractions.add_argument("inbox", help="ID of the inbox")
+
+
+list_inbox_jobs = subcommand(
+    "list-inbox-jobs",
+    group="Inboxes",
+    description="List pipeline runs triggered by documents of the inbox.",
+    handler=lambda args: get_dumper(args)(get_client(args).list_inbox_jobs(args.inbox)),
+)
+list_inbox_jobs.add_argument("inbox", help="ID of the inbox.")
 
 
 ## Documents
@@ -611,7 +612,7 @@ list_inbox_extraction.add_argument("inbox", help="ID of the inbox")
 get_document_info = subcommand(
     "get-document-info",
     group="Documents",
-    description="Get information about a stored document.",
+    description="Get information about a document.",
     handler=lambda args: get_dumper(args)(
         get_client(args).get_document_info(args.document)
     ),
@@ -619,24 +620,15 @@ get_document_info = subcommand(
 get_document_info.add_argument("document", help="ID of the document")
 
 
-delete_document = subcommand(
-    "delete-document",
-    group="Documents",
-    description="Delete document from database.",
-    handler=lambda args: get_client(args).delete_document(args.document),
-)
-delete_document.add_argument("document", help="ID of the document")
-
-
-get_document_bytes = subcommand(
-    "get-document-bytes",
+get_document_contents = subcommand(
+    "get-document-contents",
     group="Documents",
     description="Download the document itself.",
     handler=lambda args: args.output_file.buffer.write(
         get_client(args).get_document_bytes(args.document)
     ),
 )
-get_document_bytes.add_argument("document", help="ID of the document")
+get_document_contents.add_argument("document", help="ID of the document")
 
 
 get_document_extraction = subcommand(
@@ -648,6 +640,15 @@ get_document_extraction = subcommand(
     ),
 )
 get_document_extraction.add_argument("document", help="ID of the document")
+
+
+delete_document = subcommand(
+    "delete-document",
+    group="Documents",
+    description="Permanently delete a document.",
+    handler=lambda args: get_client(args).delete_document(args.document),
+)
+delete_document.add_argument("document", help="ID of the document")
 
 
 ## Final considerations
