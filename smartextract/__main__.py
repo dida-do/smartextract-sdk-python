@@ -189,11 +189,15 @@ def subcommand(
     *,
     group: str,
     handler: Callable[[argparse.Namespace], None],
+    aliases: list[str] | None = None,
     **kwargs,
 ) -> argparse.ArgumentParser:
     """Define a subcommand."""
+    if aliases is None:
+        aliases = ["".join(s[0] for s in name.split("-"))]
     subcmd = subcommands.add_parser(
         name,
+        aliases=aliases,
         formatter_class=argparse.RawDescriptionHelpFormatter,
         **kwargs,
     )
