@@ -1,0 +1,32 @@
+name: Publish to PyPI
+
+on:
+  workflow_run:
+    workflows: [Test]
+    types: [completed]
+    branches: [main]
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  publish:
+    name: Publish to PyPI
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    environment: publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install Hatch
+        run: pip install hatch
+      - name: Build package
+        run: hatch build
+      - name: Publish package
+        run: hatch publish
+        env:
+          HATCH_INDEX_USER: __token__
+          HATCH_INDEX_AUTH: ${{ secrets.PYPI_TOKEN }}
