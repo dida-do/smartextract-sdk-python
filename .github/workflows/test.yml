@@ -1,0 +1,44 @@
+name: Test
+
+on: push
+
+jobs:
+  check:
+    name: Linting
+    runs-on: ubuntu-latest
+    env:
+      PYTHON_VERSION: "3.12"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install Hatch
+        run: pip install hatch
+      - name: Run checks
+        run: |
+          hatch fmt --check
+          hatch run types:check
+  test:
+    name: Test with Python ${{ matrix.python-version }} on ${{ startsWith(matrix.os, 'macos-') && 'macOS' || startsWith(matrix.os, 'windows-') && 'Windows' || 'Linux' }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install Hatch
+        run: pip install hatch
+      - name: Run tests
+        run: hatch test
+        env:
+          SMARTEXTRACT_TEST_BASE_URL: ${{ vars.SMARTEXTRACT_TEST_BASE_URL }}
+          SMARTEXTRACT_TEST_USERNAME: ${{ vars.SMARTEXTRACT_TEST_USERNAME }}
+          SMARTEXTRACT_TEST_PASSWORD: ${{ secrets.SMARTEXTRACT_TEST_PASSWORD }}
