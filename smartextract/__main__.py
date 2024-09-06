@@ -216,29 +216,11 @@ optional_user_arg = drop_none(
     help="email or ID of the user (yourself if omitted)",
 )
 
-## Authentication
-
-
-login = subcommand(
-    "login",
-    group="Authentication and user management",
-    description="Print a temporary API key.",
-    handler=lambda args: print(
-        get_access_token(args.base_url, args.username),
-        file=args.output_file,
-    ),
-)
-login.add_argument(
-    "username",
-    nargs="?",
-    help="user's email (if omitted, ask interactively)",
-)
-
-## User Management
+### User management
 
 get_user_info = subcommand(
     "get-user-info",
-    group="Authentication and user management",
+    group="User management",
     description="Display information about a user.",
     handler=lambda args: get_dumper(args)(
         get_client(args).get_user_info(args.username)
@@ -259,7 +241,7 @@ def do_set_user_credits(args: argparse.Namespace):
 
 set_user_credits = subcommand(
     "set-user-credits",
-    group="Authentication and user management",
+    group="User management",
     description="Add credits to the user's balance.",
     handler=do_set_user_credits,
 )
@@ -272,7 +254,7 @@ set_user_credits.add_argument(
 
 list_user_jobs = subcommand(
     "list-user-jobs",
-    group="Authentication and user management",
+    group="User management",
     description="List pipeline runs triggered by the user.",
     handler=lambda args: get_dumper(args)(
         get_client(args).list_user_jobs(args.username)
@@ -280,8 +262,7 @@ list_user_jobs = subcommand(
 )
 list_user_jobs.add_argument("username", **optional_user_arg)
 
-
-## Resource management
+### Resource management
 
 get_resource_info = subcommand(
     "get-resource-info",
@@ -369,9 +350,7 @@ create_permission.add_argument(
 )
 create_permission.add_argument("username", help="user to be granted new permissions")
 
-
-## Pipelines
-
+### Pipelines
 
 create_lua_pipeline = subcommand(
     "create-lua-pipeline",
@@ -522,8 +501,7 @@ list_templates.add_argument(
     help="the template language, as a 2-character code (default: en)",
 )
 
-
-## Inboxes
+### Inboxes
 
 create_inbox = subcommand(
     "create-inbox",
@@ -606,8 +584,7 @@ list_inbox_jobs = subcommand(
 )
 list_inbox_jobs.add_argument("inbox", help="ID of the inbox.")
 
-
-## Documents
+### Documents
 
 get_document_info = subcommand(
     "get-document-info",
@@ -650,7 +627,61 @@ delete_document = subcommand(
 )
 delete_document.add_argument("document", help="ID of the document")
 
+### Miscellaneous
 
+login = subcommand(
+    "login",
+    group="Miscellaneous",
+    description="Print a temporary API key.",
+    handler=lambda args: print(
+        get_access_token(args.base_url, args.username),
+        file=args.output_file,
+    ),
+)
+login.add_argument(
+    "username",
+    nargs="?",
+    help="user's email (if omitted, ask interactively)",
+)
+
+
+def generate_completion(shell: str | None) -> str:
+    """Generate a completion script for the given shell type."""
+    try:
+        import pycomplete  # type: ignore[import-untyped]
+    except ImportError:
+        raise SystemExit(
+            "generating completions requires the pycomplete package"
+        ) from None
+    return pycomplete.Completer(cli).render(shell)
+
+
+completion = subcommand(
+    "completion",
+    group="Miscellaneous",
+    description="""\
+Print a shell completion script.
+
+The procedure to activate this depends on your shell.  For bash, try
+one of the following options:
+
+  # Current session only
+  eval "$(smartextract completion)"
+  # Eager loading (restart required)
+  smartextract completion >> ~/.bash_completion
+  # Lazy loading (restart required)
+  smartextract completion > ~/.local/share/bash-completion/completions/smartextract
+""",
+    handler=lambda args: print(
+        generate_completion(args.shell),
+        file=args.output_file,
+    ),
+)
+completion.add_argument(
+    "shell",
+    nargs="?",
+    help="shell type (bash, zsh, fish or powershell; if omitted, try to guess)",
+)
 ## Final considerations
 
 # Construct epilog message

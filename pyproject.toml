@@ -30,6 +30,7 @@ dependencies = [
 
 [project.optional-dependencies]
 cli-extras = [
+  "pycomplete>=0.4",
   "pygments>=2.0",
   "pyyaml>=5.1",
 ]
@@ -51,6 +52,7 @@ python = ["3.12", "3.11", "3.10", "3.9"]
 [tool.hatch.envs.types]
 extra-dependencies = [
   "mypy>=1.11.0",
+  "pycomplete>=0.4",
 ]
 
 [tool.hatch.envs.types.scripts]
