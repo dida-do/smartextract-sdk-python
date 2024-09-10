@@ -82,6 +82,7 @@ exclude_lines = [
 
 [tool.ruff]
 line-length = 88
+extend-exclude = ["generate.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "D", "A", "N", "B", "SIM", "C4", "TID"]

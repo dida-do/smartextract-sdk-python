@@ -18,6 +18,7 @@ jobs:
         run: pip install hatch
       - name: Run checks
         run: |
+          ./generate.py --check smartextract/__init__.py
           hatch fmt --check
           hatch run types:check
   test:
