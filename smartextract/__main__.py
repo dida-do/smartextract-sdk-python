@@ -91,7 +91,7 @@ def get_dumper(args: argparse.Namespace) -> Callable:
     if args.output_format == "json":
 
         def dump(v: Any):
-            json.dump(jsonify(v), stream, indent=2)
+            json.dump(jsonify(v), stream, indent=2, ensure_ascii=False)
             stream.write("\n")
 
     elif args.output_format == "yaml":
