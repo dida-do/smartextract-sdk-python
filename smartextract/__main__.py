@@ -18,6 +18,7 @@ from smartextract import (
     DEFAULT_BASE_URL,
     DEFAULT_TIMEOUT,
     AccessLevel,
+    BillingScheme,
     Client,
     ClientError,
     Language,
@@ -234,7 +235,10 @@ def do_set_user_credits(args: argparse.Namespace):
     client = get_client(args)
     dump = get_dumper(args)
     client.set_user_credits(
-        args.username, new_credits=args.new_credits, balance=args.balance
+        args.username,
+        new_credits=args.new_credits,
+        balance=args.balance,
+        billing_scheme=args.billing_scheme,
     )
     dump(client.get_user_info(args.username))
 
@@ -248,7 +252,15 @@ set_user_credits = subcommand(
 set_user_credits.add_argument("username", help="email or ID of the user")
 set_user_credits.add_argument("--balance", "-b", help="set a new balance")
 set_user_credits.add_argument(
-    "-c", "--new-credits", help="add credits to current balance"
+    "-c",
+    "--new-credits",
+    help="add credits to current balance",
+)
+set_user_credits.add_argument(
+    "-s",
+    "--billing-scheme",
+    help="change the user's billing scheme",
+    type=BillingScheme,
 )
 
 
