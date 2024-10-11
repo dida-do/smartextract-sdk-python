@@ -645,6 +645,87 @@ login.add_argument(
 )
 
 
+def do_request(args: argparse.Namespace) -> None:
+    """Perform an arbitrary API request."""
+    client = get_client(args)
+    dump = get_dumper(args)
+    if "://" in args.endpoint:
+        cli.print_usage()
+        raise SystemExit(
+            f"{cli.prog} request: error: argument endpoint: provide a relative path "
+            f"excluding the initial {args.base_url}"
+        )
+    method = args.method or ("POST" if (args.file or args.json) else "GET")
+    params = (
+        {k: v for k, _, v in (arg.partition("=") for arg in args.param)}
+        if args.param
+        else None
+    )
+    files = (
+        {
+            k: open(v, "rb")  # noqa: SIM115
+            for k, _, v in (arg.partition("=") for arg in args.file)
+        }
+        if args.file
+        else None
+    )
+    jayson = (
+        json.load(sys.stdin)
+        if args.json == "-"
+        else json.loads(args.json)
+        if args.json
+        else None
+    )
+    r = client._request(
+        method,
+        args.endpoint,
+        params=params,
+        files=files,
+        json=jayson,
+    )
+    dump(r.json())
+
+
+login = subcommand(
+    "request",
+    group="Miscellaneous",
+    description="""\
+Make an arbitrary request to the API.
+
+This should be used only for debugging purposes.
+""",
+    handler=do_request,
+)
+login.add_argument(
+    "endpoint",
+)
+login.add_argument(
+    "-m",
+    "--method",
+    help="request method, such as GET, POST, PUT, PATCH, DELETE"
+    " (default: GET, or POST if a request body is included)",
+)
+login.add_argument(
+    "-p",
+    "--param",
+    help="query parameters to include in the request URL",
+    action="append",
+    metavar="KEY=VALUE",
+)
+login.add_argument(
+    "-f",
+    "--file",
+    help="form file to include in the request body",
+    action="append",
+    metavar="NAME=FILENAME",
+)
+login.add_argument(
+    "-j",
+    "--json",
+    help="JSON data to include in the request body",
+)
+
+
 def generate_completion(shell: str | None) -> str:
     """Generate a completion script for the given shell type."""
     try:
