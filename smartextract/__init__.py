@@ -181,6 +181,7 @@ class TemplatePipelineInfo(ResourceInfo):
     )
     ocr_id: UUID = Field(description="OCR component used by the pipeline.")
     chat_id: UUID = Field(description="LLM component used by the pipeline.")
+    use_vision: bool = Field(description="Whether to use LLM vision in this pipeline.")
 
 
 class TemplateInfo(BaseInfo):
@@ -579,6 +580,7 @@ class AsyncClient:
         chat_id: Optional[ResourceID] = None,
         ocr_id: Optional[ResourceID] = None,
         permissions: Optional[dict[str, AccessLevel]] = None,
+        use_vision: Optional[bool] = None,
     ) -> UUID:
         """Create a new pipeline based on a yaml-template.
 
@@ -597,6 +599,7 @@ class AsyncClient:
                 chat_id=chat_id,
                 ocr_id=ocr_id,
                 permissions=permissions,
+                use_vision=use_vision,
             ),
         )
         return UUID(r.json()["id"])
@@ -610,11 +613,13 @@ class AsyncClient:
         template: Union[None, str, dict] = None,
         chat_id: Optional[ResourceID] = None,
         ocr_id: Optional[ResourceID] = None,
+        use_vision: Optional[bool] = None,
     ) -> None:
         """Change details of an existing pipeline.
 
-        Provide a new Lua script (code) for a Lua pipeline.
-        Or provide a new chat_id, ocr_id or template for a template pipeline.
+        Provide a new Lua script (code) for a Lua pipeline, or provide
+        a new template, chat_id, ocr_id or use_vision attribute for a
+        template pipeline.
         """
         await self._request(
             "PATCH",
@@ -625,6 +630,7 @@ class AsyncClient:
                 template=template,
                 chat_id=chat_id,
                 ocr_id=ocr_id,
+                use_vision=use_vision,
             ),
         )
 
@@ -1094,6 +1100,7 @@ class Client:
         chat_id: Optional[ResourceID] = None,
         ocr_id: Optional[ResourceID] = None,
         permissions: Optional[dict[str, AccessLevel]] = None,
+        use_vision: Optional[bool] = None,
     ) -> UUID:
         """Create a new pipeline based on a yaml-template.
 
@@ -1112,6 +1119,7 @@ class Client:
                 chat_id=chat_id,
                 ocr_id=ocr_id,
                 permissions=permissions,
+                use_vision=use_vision,
             ),
         )
         return UUID(r.json()["id"])
@@ -1125,11 +1133,13 @@ class Client:
         template: Union[None, str, dict] = None,
         chat_id: Optional[ResourceID] = None,
         ocr_id: Optional[ResourceID] = None,
+        use_vision: Optional[bool] = None,
     ) -> None:
         """Change details of an existing pipeline.
 
-        Provide a new Lua script (code) for a Lua pipeline.
-        Or provide a new chat_id, ocr_id or template for a template pipeline.
+        Provide a new Lua script (code) for a Lua pipeline, or provide
+        a new template, chat_id, ocr_id or use_vision attribute for a
+        template pipeline.
         """
         self._request(
             "PATCH",
@@ -1140,6 +1150,7 @@ class Client:
                 template=template,
                 chat_id=chat_id,
                 ocr_id=ocr_id,
+                use_vision=use_vision,
             ),
         )
 

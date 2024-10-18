@@ -429,6 +429,7 @@ Any details not provided as a switch are left unchanged.
         template=args.template,
         ocr_id=args.ocr or None,
         chat_id=args.chat or None,
+        use_vision=args.use_vision,
     ),
 )
 modify_pipeline.add_argument(
@@ -445,6 +446,11 @@ modify_pipeline.add_argument(
 )
 modify_pipeline.add_argument("--ocr", help="ID or alias of OCR resource")
 modify_pipeline.add_argument("--chat", help="ID or alias of chat resource")
+modify_pipeline.add_argument(
+    "--use-vision",
+    action=argparse.BooleanOptionalAction,
+    help="Enable or disable LLM vision.",
+)
 
 
 run_pipeline = subcommand(
