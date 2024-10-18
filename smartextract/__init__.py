@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 import httpx
 from pydantic import BaseModel, EmailStr, Field, JsonValue
 
-__version__ = "0.1"
+__version__ = "0.2"
 
 DEFAULT_BASE_URL = "https://api.smartextract.ai"
 DEFAULT_TIMEOUT = 600  # seconds
