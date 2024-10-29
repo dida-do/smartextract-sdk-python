@@ -701,7 +701,8 @@ def do_request(args: argparse.Namespace) -> None:
         files=files,
         json=jayson,
     )
-    dump(r.json())
+    if r.headers["content-type"] == "application/json":
+        dump(r.json())
 
 
 login = subcommand(
