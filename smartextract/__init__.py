@@ -256,7 +256,7 @@ class JobResult(BaseInfo):
         description="Result of the pipeline run;"
         " the data schema depends on the pipeline."
     )
-    error: Optional[str] = Field(
+    error: JsonValue = Field(
         default=None,
         description="Error message, or null if the run was successful.",
     )
