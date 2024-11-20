@@ -813,7 +813,11 @@ def main():
     logging.getLogger().setLevel(log_level)
 
     # Dispatch subcommand
-    args.handler(args)
+    try:
+        args.handler(args)
+    except ClientError as err:
+        logger.error("%s", err.args[1])
+        raise SystemExit() from err
 
 
 if __name__ == "__main__":
