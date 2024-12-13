@@ -12,7 +12,7 @@ from collections.abc import Callable
 from getpass import getpass
 from typing import Any
 
-from pydantic import TypeAdapter
+from pydantic import JsonValue, TypeAdapter
 
 from smartextract import (
     DEFAULT_BASE_URL,
@@ -129,6 +129,15 @@ def get_dumper(args: argparse.Namespace) -> Callable:
             )
 
     return dump
+
+
+def json_data(filename: str) -> JsonValue:
+    """A CLI argument type accepting a file name and returning its content as JSON."""
+    file = argparse.FileType("r")(filename)
+    try:
+        return json.load(file)
+    except Exception as e:
+        raise SystemExit(f"Error reading JSON data from {file.name}: {e}") from e
 
 
 ## CLI definition
@@ -380,13 +389,12 @@ create_lua_pipeline.add_argument(
 )
 
 
-def cli_template(template: str) -> str | dict:
+def cli_template(template: str) -> JsonValue:
     """CLI type for extraction templates (template ID of JSON file name)."""
     try:
-        f = argparse.FileType("r")(template)
+        return json_data(template)
     except argparse.ArgumentTypeError:
         return template
-    return json.load(f)
 
 
 create_template_pipeline = subcommand(
@@ -488,7 +496,7 @@ run_anonymous_pipeline.add_argument(
 run_anonymous_pipeline.add_argument(
     "-t",
     "--template",
-    type=cli_template,
+    type=json_data,
     help="JSON file containing an extraction template",
 )
 
@@ -635,6 +643,20 @@ get_document_extraction = subcommand(
     ),
 )
 get_document_extraction.add_argument("document", help="ID of the document")
+
+
+set_document_extraction = subcommand(
+    "set-document-extraction",
+    group="Documents",
+    description="Set document extraction.",
+    handler=lambda args: get_client(args).set_document_extraction(
+        args.document, args.extraction
+    ),
+)
+set_document_extraction.add_argument("document", help="ID of the document")
+set_document_extraction.add_argument(
+    "extraction", type=json_data, help="Extraction data as a JSON file"
+)
 
 
 delete_document = subcommand(

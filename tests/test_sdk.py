@@ -429,3 +429,15 @@ def test_get_document_extraction(
     assert recent_time(doc_extraction.created_at)
     assert doc_extraction.created_by == my_email
     assert doc_extraction.result == "Hello Smartextract!"
+
+
+def test_set_document_extraction(client, document_id, document_name, my_email):
+    client.set_document_extraction(document_id, [1, 2, 3])
+    doc_extraction = client.get_document_extraction(document_id)
+
+    assert doc_extraction.document_id == document_id
+    assert doc_extraction.document_name == document_name
+    assert doc_extraction.pipeline_id is None
+    assert recent_time(doc_extraction.created_at)
+    assert doc_extraction.created_by == my_email
+    assert doc_extraction.result == [1, 2, 3]

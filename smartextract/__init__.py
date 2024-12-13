@@ -239,7 +239,10 @@ class ExtractionInfo(BaseInfo):
 
     document_id: UUID = Field(description="The document ID number.")
     document_name: str = Field(description="The document file name.")
-    pipeline_id: UUID = Field(description="Pipeline used to compute the extraction")
+    pipeline_id: Optional[UUID] = Field(
+        description="Pipeline used to compute the extraction,"
+        " or None if it is a manual correction."
+    )
     created_at: datetime = Field(description="Date when the extraction was computed.")
     created_by: EmailStr = Field(
         description="User responsible for triggering the extraction compuattion."
@@ -851,6 +854,14 @@ class AsyncClient:
         r = await self._request("GET", f"/documents/{document_id}/extraction")
         return ExtractionInfo.from_response(r)
 
+    async def set_document_extraction(
+        self, document_id: ResourceID, extraction: JsonValue
+    ) -> None:
+        """Manually override the extraction data of the given document."""
+        await self._request(
+            "POST", f"/documents/{document_id}/extraction", json=extraction
+        )
+
     # end of code template
 
 
@@ -1370,5 +1381,11 @@ class Client:
         """Get the document extraction from its latest pipeline processing."""
         r = self._request("GET", f"/documents/{document_id}/extraction")
         return ExtractionInfo.from_response(r)
+
+    def set_document_extraction(
+        self, document_id: ResourceID, extraction: JsonValue
+    ) -> None:
+        """Manually override the extraction data of the given document."""
+        self._request("POST", f"/documents/{document_id}/extraction", json=extraction)
 
     # end of generated code
