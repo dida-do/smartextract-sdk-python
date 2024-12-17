@@ -849,9 +849,15 @@ class AsyncClient:
         r = await self._request("GET", f"/documents/{document_id}/blob")
         return r.content
 
-    async def get_document_extraction(self, document_id: ResourceID) -> ExtractionInfo:
+    async def get_document_extraction(
+        self, document_id: ResourceID, *, recompute: bool = False
+    ) -> ExtractionInfo:
         """Get the document extraction from its latest pipeline processing."""
-        r = await self._request("GET", f"/documents/{document_id}/extraction")
+        r = await self._request(
+            "GET",
+            f"/documents/{document_id}/extraction",
+            params=drop_none(recompute=recompute),
+        )
         return ExtractionInfo.from_response(r)
 
     async def set_document_extraction(
@@ -1377,9 +1383,15 @@ class Client:
         r = self._request("GET", f"/documents/{document_id}/blob")
         return r.content
 
-    def get_document_extraction(self, document_id: ResourceID) -> ExtractionInfo:
+    def get_document_extraction(
+        self, document_id: ResourceID, *, recompute: bool = False
+    ) -> ExtractionInfo:
         """Get the document extraction from its latest pipeline processing."""
-        r = self._request("GET", f"/documents/{document_id}/extraction")
+        r = self._request(
+            "GET",
+            f"/documents/{document_id}/extraction",
+            params=drop_none(recompute=recompute),
+        )
         return ExtractionInfo.from_response(r)
 
     def set_document_extraction(

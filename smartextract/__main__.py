@@ -639,10 +639,19 @@ get_document_extraction = subcommand(
     group="Documents",
     description="Get document extraction.",
     handler=lambda args: get_dumper(args)(
-        get_client(args).get_document_extraction(args.document)
+        get_client(args).get_document_extraction(
+            args.document,
+            recompute=args.recompute,
+        )
     ),
 )
 get_document_extraction.add_argument("document", help="ID of the document")
+get_document_extraction.add_argument(
+    "-r",
+    "--recompute",
+    help="recompute extraction instead of returning a previously computed one",
+    action="store_true",
+)
 
 
 set_document_extraction = subcommand(
