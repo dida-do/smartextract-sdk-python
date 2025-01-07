@@ -278,10 +278,16 @@ list_user_jobs = subcommand(
     group="User management",
     description="List pipeline runs triggered by the user.",
     handler=lambda args: get_dumper(args)(
-        get_client(args).list_user_jobs(args.username)
+        get_client(args).list_user_jobs(args.username, errors_only=args.errors_only)
     ),
 )
 list_user_jobs.add_argument("username", **optional_user_arg)
+list_user_jobs.add_argument(
+    "-e",
+    "--errors-only",
+    action="store_true",
+    help="list only failed jobs",
+)
 
 ### Resource management
 

@@ -128,7 +128,7 @@ class JobInfo(BaseInfo):
     pipeline_id: Optional[UUID]
     started_at: datetime
     duration: timedelta
-    error: Optional[str]
+    error: JsonValue
 
 
 class UserPermission(BaseInfo):
@@ -383,6 +383,7 @@ class AsyncClient:
         *,
         limit: int | None = None,
         offset: int | None = None,
+        errors_only: bool | None = None,
     ) -> Page[JobInfo]:
         """List all a user's jobs with their duration and status.
 
@@ -391,7 +392,7 @@ class AsyncClient:
         r = await self._request(
             "GET",
             f"/users/{user}/jobs",
-            params=drop_none(limit=limit, offset=offset),
+            params=drop_none(limit=limit, offset=offset, errors_only=errors_only),
         )
         return Page[JobInfo].from_response(r)
 
@@ -921,6 +922,7 @@ class Client:
         *,
         limit: int | None = None,
         offset: int | None = None,
+        errors_only: bool | None = None,
     ) -> Page[JobInfo]:
         """List all a user's jobs with their duration and status.
 
@@ -929,7 +931,7 @@ class Client:
         r = self._request(
             "GET",
             f"/users/{user}/jobs",
-            params=drop_none(limit=limit, offset=offset),
+            params=drop_none(limit=limit, offset=offset, errors_only=errors_only),
         )
         return Page[JobInfo].from_response(r)
 
