@@ -180,7 +180,11 @@ class TemplatePipelineInfo(ResourceInfo):
         " described at https://smartextract.ai/schemas/template."
     )
     ocr_id: UUID = Field(description="OCR component used by the pipeline.")
-    chat_id: UUID = Field(description="LLM component used by the pipeline.")
+    chat_id: UUID = Field(description="LLM component used for extraction.")
+    location_chat_id: Optional[UUID] = Field(
+        description="LLM component used for location analysis,"
+        " or None if location analysis is disabled."
+    )
     use_vision: bool = Field(description="Whether to use LLM vision in this pipeline.")
 
 
@@ -616,6 +620,7 @@ class AsyncClient:
         code: Optional[str] = None,
         template: Union[None, str, dict] = None,
         chat_id: Optional[ResourceID] = None,
+        location_chat_id: Optional[ResourceID] = None,
         ocr_id: Optional[ResourceID] = None,
         use_vision: Optional[bool] = None,
     ) -> None:
@@ -633,6 +638,7 @@ class AsyncClient:
                 code=code,
                 template=template,
                 chat_id=chat_id,
+                location_chat_id=location_chat_id,
                 ocr_id=ocr_id,
                 use_vision=use_vision,
             ),
@@ -1151,6 +1157,7 @@ class Client:
         code: Optional[str] = None,
         template: Union[None, str, dict] = None,
         chat_id: Optional[ResourceID] = None,
+        location_chat_id: Optional[ResourceID] = None,
         ocr_id: Optional[ResourceID] = None,
         use_vision: Optional[bool] = None,
     ) -> None:
@@ -1168,6 +1175,7 @@ class Client:
                 code=code,
                 template=template,
                 chat_id=chat_id,
+                location_chat_id=location_chat_id,
                 ocr_id=ocr_id,
                 use_vision=use_vision,
             ),
