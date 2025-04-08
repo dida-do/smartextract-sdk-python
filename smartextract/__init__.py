@@ -6,20 +6,26 @@ documentation.
 
 from __future__ import annotations
 
+import asyncio
 import json
+import time
 from datetime import datetime, timedelta
 from enum import Enum
+from http import HTTPStatus
+from http.client import CONFLICT
 from io import IOBase
 from mimetypes import MimeTypes
 from os.path import basename
 from typing import IO, TYPE_CHECKING, Any, Generic, Literal, Optional, TypeVar, Union
+from urllib.request import AbstractBasicAuthHandler
 from uuid import UUID
+
+import httpx
+from pydantic import BaseModel, EmailStr, Field, JsonValue
 
 if TYPE_CHECKING:
     from typing import Self  # For Python ≤ 3.10
 
-import httpx
-from pydantic import BaseModel, EmailStr, Field, JsonValue
 
 __version__ = "0.3"
 
@@ -359,10 +365,16 @@ class AsyncClient:
         )
 
     async def _request(self, method: str, url: str, **kwargs) -> httpx.Response:
-        r = await self._httpx.request(method, url, **kwargs)
-        if not r.is_success:
-            raise ClientError.from_response(r)
-        return r
+        while True:
+            r = await self._httpx.request(method, url, **kwargs)
+            if r.status_code == HTTPStatus.CONFLICT and (
+                secs := r.headers.get("retry-after")
+            ):
+                await asyncio.sleep(int(secs))
+                continue
+            if not r.is_success:
+                raise ClientError.from_response(r)
+            return r
 
     # NOTE: All code in the "start/end of code template" block must be
     # such that it makes sense when erasing all async and await
@@ -860,10 +872,17 @@ class AsyncClient:
         self, document_id: ResourceID, *, recompute: bool = False
     ) -> ExtractionInfo:
         """Get the document extraction from its latest pipeline processing."""
+        if recompute:
+            r = await self._request(
+                "POST",
+                f"/documents/{document_id}/extraction",
+                params={"recompute": True},
+            )
+            if not r.is_success:
+                raise ClientError.from_response(r)
         r = await self._request(
             "GET",
             f"/documents/{document_id}/extraction",
-            params=drop_none(recompute=recompute),
         )
         return ExtractionInfo.from_response(r)
 
@@ -905,10 +924,20 @@ class Client:
         )
 
     def _request(self, method: str, url: str, **kwargs) -> httpx.Response:
-        r = self._httpx.request(method, url, **kwargs)
-        if not r.is_success:
-            raise ClientError.from_response(r)
-        return r
+        while True:
+            r = self._httpx.request(method, url, **kwargs)
+            if r.status_code == HTTPStatus.CONFLICT and (
+                secs := r.headers.get("retry-after")
+            ):
+                time.sleep(int(secs))
+                continue
+            if not r.is_success:
+                raise ClientError.from_response(r)
+            return r
+
+    def _sleep_for_retry(self, r: httpx.Response) -> None:
+        s = int(r.headers.get("retry-after", 1))
+        time.sleep(s)
 
     # start of generated code
     def list_templates(self, language: Language = "en") -> list[TemplateInfo]:
@@ -1397,10 +1426,17 @@ class Client:
         self, document_id: ResourceID, *, recompute: bool = False
     ) -> ExtractionInfo:
         """Get the document extraction from its latest pipeline processing."""
+        if recompute:
+            r = self._request(
+                "POST",
+                f"/documents/{document_id}/extraction",
+                params={"recompute": True},
+            )
+            if not r.is_success:
+                raise ClientError.from_response(r)
         r = self._request(
             "GET",
             f"/documents/{document_id}/extraction",
-            params=drop_none(recompute=recompute),
         )
         return ExtractionInfo.from_response(r)
 
