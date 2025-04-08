@@ -102,7 +102,7 @@ def get_dumper(args: argparse.Namespace) -> Callable:
             raise RuntimeError("YAML output requires the PyYAML package") from None
 
         def dump(v: Any):
-            yaml.safe_dump(jsonify(v), stream, sort_keys=False)
+            yaml.safe_dump(jsonify(v), stream, sort_keys=False, allow_unicode=True)
 
     else:
         raise RuntimeError("Invalid output format")
