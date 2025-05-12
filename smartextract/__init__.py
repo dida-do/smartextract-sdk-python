@@ -132,6 +132,7 @@ class JobInfo(BaseInfo):
     """Information about a pipeline run."""
 
     pipeline_id: Optional[UUID]
+    filename: Optional[str]
     started_at: datetime
     duration: timedelta
     error: JsonValue
