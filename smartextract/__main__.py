@@ -360,22 +360,41 @@ list_permissions = subcommand(
 list_permissions.add_argument("id_or_alias", help="Resource UUID or resource alias")
 
 
+def _do_create_permission(args):
+    client, is_error = get_client(args), False
+    for res in args.resource:
+        for lv in AccessLevel:
+            for user in getattr(args, lv.name) or ():
+                try:
+                    client.create_permission(res, user, lv)
+                except ClientError as err:
+                    is_error = True
+                    logger.error(
+                        "Can't give %s '%s' permission to %s: %s",
+                        user,
+                        lv.name,
+                        res,
+                        err.args[1],
+                    )
+    if is_error:
+        raise SystemExit(1)
+
+
 create_permission = subcommand(
     "create-permission",
     group="Resource management",
-    description="Grant a user permission to access a resource.",
-    handler=lambda args: get_client(args).create_permission(
-        args.resource, args.username, args.level
-    ),
+    description="Grant users permission to access the given resources.",
+    handler=_do_create_permission,
 )
-create_permission.add_argument("resource", help="resource ID or alias")
-create_permission.add_argument(
-    "level",
-    help="new access level",
-    default="edit",
-    choices=[v.value for v in AccessLevel],
-)
-create_permission.add_argument("username", help="user to be granted new permissions")
+create_permission.add_argument("resource", help="resource ID or alias", nargs="+")
+for lv in AccessLevel:
+    create_permission.add_argument(
+        f"-{lv.name[0]}",
+        f"--{lv.name}",
+        help=f"user to be granted '{lv.name}' permission",
+        action="append",
+        metavar="USER",
+    )
 
 ### Pipelines
 
@@ -858,7 +877,7 @@ def main():
         args.handler(args)
     except ClientError as err:
         logger.error("%s", err.args[1])
-        raise SystemExit() from err
+        raise SystemExit(1) from err
 
 
 if __name__ == "__main__":
