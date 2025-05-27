@@ -29,6 +29,9 @@ from smartextract import (
 logger = logging.getLogger("smartextract")
 
 
+## Helper functions
+
+
 def get_access_token(base_url: str, username: str | None) -> str:
     """Retrieve access token based on username and password.
 
@@ -131,13 +134,41 @@ def get_dumper(args: argparse.Namespace) -> Callable:
     return dump
 
 
-def json_data(filename: str) -> JsonValue:
+def json_argument(data_or_file: str) -> JsonValue:
     """A CLI argument type accepting a file name and returning its content as JSON."""
-    file = argparse.FileType("r")(filename)
+    if data_or_file.startswith("@"):
+        file = argparse.FileType("r")(data_or_file[1:])
+    else:
+        file = None
     try:
-        return json.load(file)
+        return json.load(file) if file else json.loads(data_or_file)
     except Exception as e:
-        raise SystemExit(f"Error reading JSON data from {file.name}: {e}") from e
+        where = file.name if file else "command line"
+        raise argparse.ArgumentTypeError(
+            f"Error reading JSON data from {where}: {e}"
+        ) from e
+
+
+json_argument_help = "either a literal JSON value or @FILENAME to read from a file"
+
+
+def template_argument(template: str) -> JsonValue:
+    """CLI type for extraction templates (template ID of JSON file name)."""
+    return template[1:] if template.startswith("#") else json_argument(template)
+
+
+template_argument_help = (
+    "extraction template (literal JSON value or #NAME.LANG to use"
+    " a predefined template or @FILENAME to read from a file)"
+)
+
+
+def key_value_argument(s: str) -> tuple[str, str]:
+    """A CLI argument type of the form KEY=VALUE."""
+    k, sep, v = s.partition("=")
+    if sep != "=":
+        raise argparse.ArgumentTypeError("Argument should be of the form KEY=VALUE")
+    return (k, v)
 
 
 ## CLI definition
@@ -414,14 +445,6 @@ create_lua_pipeline.add_argument(
 )
 
 
-def cli_template(template: str) -> JsonValue:
-    """CLI type for extraction templates (template ID of JSON file name)."""
-    try:
-        return json_data(template)
-    except argparse.ArgumentTypeError:
-        return template
-
-
 create_template_pipeline = subcommand(
     "create-template-pipeline",
     group="Pipelines",
@@ -440,8 +463,8 @@ create_template_pipeline.add_argument(
 )
 create_template_pipeline.add_argument(
     "template",
-    type=cli_template,
-    help="template ID or file containing an extraction template in JSON format",
+    type=template_argument,
+    help=template_argument_help,
 )
 create_template_pipeline.add_argument("--ocr", help="ID or alias of OCR resource")
 create_template_pipeline.add_argument("--chat", help="ID or alias of extraction LLM")
@@ -475,8 +498,8 @@ modify_pipeline.add_argument(
 )
 modify_pipeline.add_argument(
     "--template",
-    type=cli_template,
-    help="template ID or file containing an extraction template in JSON format",
+    type=template_argument,
+    help=template_argument_help,
 )
 modify_pipeline.add_argument("--ocr", help="ID or alias of OCR resource")
 modify_pipeline.add_argument("--chat", help="ID or alias of extraction LLM")
@@ -525,8 +548,8 @@ run_anonymous_pipeline.add_argument(
 run_anonymous_pipeline.add_argument(
     "-t",
     "--template",
-    type=json_data,
-    help="JSON file containing an extraction template",
+    type=template_argument,
+    help=template_argument_help,
 )
 
 
@@ -693,7 +716,9 @@ set_document_extraction = subcommand(
 )
 set_document_extraction.add_argument("document", help="ID of the document")
 set_document_extraction.add_argument(
-    "extraction", type=json_data, help="Extraction data as a JSON file"
+    "extraction",
+    type=json_argument,
+    help=f"new extraction data, {json_argument_help}",
 )
 
 
@@ -734,34 +759,16 @@ def do_request(args: argparse.Namespace) -> None:
             f"excluding the initial {args.base_url}"
         )
     method = args.method or ("POST" if (args.file or args.json) else "GET")
-    params = (
-        {k: v for k, _, v in (arg.partition("=") for arg in args.param)}
-        if args.param
-        else None
-    )
-    files = (
-        {
-            k: open(v, "rb")  # noqa: SIM115
-            for k, _, v in (arg.partition("=") for arg in args.file)
-        }
-        if args.file
-        else None
-    )
-    jayson = (
-        json.load(sys.stdin)
-        if args.json == "-"
-        else json.loads(args.json)
-        if args.json
-        else None
-    )
+    params = dict(args.param) if args.param else None
+    files = dict(args.file) if args.file else None
     r = client._request(
         method,
         args.endpoint,
         params=params,
         files=files,
-        json=jayson,
+        json=args.json,
     )
-    if r.headers["content-type"] == "application/json":
+    if r.headers.get("content-type") == "application/json":
         dump(r.json())
 
 
@@ -790,6 +797,7 @@ login.add_argument(
     help="query parameters to include in the request URL",
     action="append",
     metavar="KEY=VALUE",
+    type=key_value_argument,
 )
 login.add_argument(
     "-f",
@@ -797,11 +805,15 @@ login.add_argument(
     help="form file to include in the request body",
     action="append",
     metavar="NAME=FILENAME",
+    type=lambda arg: (
+        (kv := key_value_argument(arg)) and (kv[0], argparse.FileType("rb")(kv[1]))
+    ),
 )
 login.add_argument(
     "-j",
     "--json",
-    help="JSON data to include in the request body",
+    help=f"request body data, {json_argument_help}",
+    type=json_argument,
 )
 
 
