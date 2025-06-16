@@ -17,6 +17,7 @@ from io import IOBase
 from mimetypes import MimeTypes
 from os.path import basename
 from typing import IO, TYPE_CHECKING, Any, Generic, Literal, Optional, TypeVar, Union
+from urllib.parse import quote as url_quote
 from urllib.request import AbstractBasicAuthHandler
 from uuid import UUID
 
@@ -895,6 +896,18 @@ class AsyncClient:
             "POST", f"/documents/{document_id}/extraction", json=extraction
         )
 
+    async def create_dataset_item(
+        self, dataset_id: ResourceID, key: str, value: JsonValue
+    ):
+        """Add item to a dataset."""
+        key = url_quote(key)
+        await self._request("POST", f"/datasets/{dataset_id}/items/{key}", json=value)
+
+    async def delete_dataset_item(self, dataset_id: ResourceID, key: str):
+        """Add item to a dataset."""
+        key = url_quote(key)
+        await self._request("DELETE", f"/datasets/{dataset_id}/items/{key}")
+
     # end of code template
 
 
@@ -1446,5 +1459,15 @@ class Client:
     ) -> None:
         """Manually override the extraction data of the given document."""
         self._request("POST", f"/documents/{document_id}/extraction", json=extraction)
+
+    def create_dataset_item(self, dataset_id: ResourceID, key: str, value: JsonValue):
+        """Add item to a dataset."""
+        key = url_quote(key)
+        self._request("POST", f"/datasets/{dataset_id}/items/{key}", json=value)
+
+    def delete_dataset_item(self, dataset_id: ResourceID, key: str):
+        """Add item to a dataset."""
+        key = url_quote(key)
+        self._request("DELETE", f"/datasets/{dataset_id}/items/{key}")
 
     # end of generated code
