@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from typing import Self  # For Python ≤ 3.10
 
 
-__version__ = "0.4"
+__version__ = "0.5"
 
 DEFAULT_BASE_URL = "https://api.smartextract.ai"
 DEFAULT_TIMEOUT = 600  # seconds
