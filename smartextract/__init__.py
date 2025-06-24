@@ -178,6 +178,11 @@ class LuaPipelineInfo(ResourceInfo):
     """Information about a Lua pipeline."""
 
     code: str = Field(description="Lua code of the pipeline.")
+    template: Optional[dict] = Field(
+        description="An optional extraction template this pipeline"
+        " declares to return, conforming to the schema described at"
+        " https://smartextract.ai/schemas/template.",
+    )
 
 
 class TemplatePipelineInfo(ResourceInfo):
