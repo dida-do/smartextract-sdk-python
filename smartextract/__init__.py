@@ -231,6 +231,11 @@ class InboxInfo(ResourceInfo):
         description="OCR component used to search documents in the inbox."
         " Ideally (but not necessarily) should match the OCR of the inbox pipeline."
     )
+    postprocessor_id: Optional[UUID] = Field(
+        default=None,
+        description="OCR component used to search documents in the inbox."
+        " Ideally (but not necessarily) should match the OCR of the inbox pipeline.",
+    )
 
 
 class DocumentInfo(BaseInfo):
