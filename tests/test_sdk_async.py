@@ -5,6 +5,7 @@ from uuid import UUID
 
 import httpx
 import pytest
+from email_validator import validate_email
 
 from smartextract import (
     AccessLevel,
@@ -37,7 +38,7 @@ async def test_list_templates(aclient: AsyncClient, lang):
 
 async def test_get_user_info_async(aclient: AsyncClient):
     info = await aclient.get_user_info()
-    assert info.email == os.getenv("SMARTEXTRACT_TEST_USERNAME")
+    validate_email(info.email, check_deliverability=False)
     assert info.previous_refill_date.tzinfo == timezone.utc
     assert info.previous_refill_date < datetime.now(timezone.utc)
 

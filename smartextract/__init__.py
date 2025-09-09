@@ -12,13 +12,22 @@ import time
 from datetime import datetime, timedelta
 from enum import Enum
 from http import HTTPStatus
-from http.client import CONFLICT
 from io import IOBase
 from mimetypes import MimeTypes
 from os.path import basename
-from typing import IO, TYPE_CHECKING, Any, Generic, Literal, Optional, TypeVar, Union
+from pathlib import Path
+from typing import (
+    IO,
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Generic,
+    Literal,
+    Optional,
+    TypeVar,
+    Union,
+)
 from urllib.parse import quote as url_quote
-from urllib.request import AbstractBasicAuthHandler
 from uuid import UUID
 
 import httpx
@@ -321,17 +330,6 @@ def drop_none(**kwargs) -> dict[str, Any]:
     return {k: v for k, v in kwargs.items() if v is not None}
 
 
-def _get_jwt_token(base_url, username, password) -> str:
-    """Obtain a temporary JWT access token."""
-    r = httpx.post(
-        f"{base_url}/auth/jwt/login",
-        data={"username": username, "password": password},
-    )
-    if not r.is_success:
-        raise ClientError.from_response(r)
-    return r.json()["access_token"]
-
-
 def _guess_filename(document: Document) -> str | None:
     name = isinstance(document, IOBase) and getattr(document, "name", None)
     if not isinstance(name, str):
@@ -348,6 +346,18 @@ def _guess_media_type(filename: str | None = None) -> str | None:
     return media_type
 
 
+class BearerAuth(httpx.Auth):
+    """httpx authentication method based on a bearer token."""
+
+    def __init__(self, access_token: str):
+        self._auth_header = f"Bearer {access_token}"
+
+    def auth_flow(self, request: httpx.Request):
+        """Add authorization header."""
+        request.headers["Authorization"] = self._auth_header
+        yield request
+
+
 class AsyncClient:
     """smartextract API client."""
 
@@ -358,20 +368,21 @@ class AsyncClient:
         password: Optional[str] = None,
         base_url: str = DEFAULT_BASE_URL,
         timeout: Union[None, float, httpx.Timeout] = DEFAULT_TIMEOUT,
+        token_file: Optional[str | Path] = None,
         _transport: httpx.AsyncBaseTransport | None = None,
     ):
         """Initialize AsyncClient using either an API key or username and password."""
-        if api_key is None:
-            if not username:
-                raise ValueError(
-                    "Either an API key or a username/password pair must be provided."
-                )
-            if not password:
-                raise ValueError("A password must be provided.")
-            api_key = _get_jwt_token(base_url, username, password)
+        if username or password:
+            raise RuntimeError("Password login is deprecated.")
+        if api_key:
+            auth: httpx.Auth = BearerAuth(api_key)
+        else:
+            from smartextract._oauth import OAuth2Auth
+
+            auth = OAuth2Auth(base_url, token_file)
         self._httpx = httpx.AsyncClient(
             base_url=base_url,
-            headers={"Authorization": f"Bearer {api_key}"},
+            auth=auth,
             timeout=timeout,
             transport=_transport,
         )
@@ -931,19 +942,20 @@ class Client:
         password: Optional[str] = None,
         base_url: str = DEFAULT_BASE_URL,
         timeout: Union[None, float, httpx.Timeout] = DEFAULT_TIMEOUT,
+        token_file: Optional[str | Path] = None,
     ):
         """Initialize the Client using either an API key or username and password."""
-        if api_key is None:
-            if not username:
-                raise ValueError(
-                    "Either an API key or a username/password pair must be provided."
-                )
-            if not password:
-                raise ValueError("A password must be provided.")
-            api_key = _get_jwt_token(base_url, username, password)
+        if username or password:
+            raise RuntimeError("Password login is deprecated.")
+        if api_key:
+            auth: httpx.Auth = BearerAuth(api_key)
+        else:
+            from smartextract._oauth import OAuth2Auth
+
+            auth = OAuth2Auth(base_url, token_file)
         self._httpx = httpx.Client(
             base_url=base_url,
-            headers={"Authorization": f"Bearer {api_key}"},
+            auth=auth,
             timeout=timeout,
         )
 

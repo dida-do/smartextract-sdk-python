@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import io
 import json
 import logging
 import os
+import pathlib
 import sys
 from collections.abc import Callable
-from getpass import getpass
 from typing import Any
 
 from pydantic import JsonValue, TypeAdapter
@@ -22,7 +23,6 @@ from smartextract import (
     Client,
     ClientError,
     Language,
-    _get_jwt_token,
     drop_none,
 )
 
@@ -32,38 +32,16 @@ logger = logging.getLogger("smartextract")
 ## Helper functions
 
 
-def get_access_token(base_url: str, username: str | None) -> str:
-    """Retrieve access token based on username and password.
-
-    If a username is not given, read it interactively (but only if on
-    a TTY).  Read the password interactively when on a TTY, or from
-    stdin otherwise.
-    """
-    if not username:
-        if not sys.stdin.isatty():
-            raise SystemExit("error: no username or API key provided")
-        # Read username, writing prompt to TTY if possible and to
-        # stderr as a fallback, so this works well inside shell
-        # command substitutions.
-        prompt = "Username: "
-        try:
-            with open("/dev/tty", "w") as tty:
-                tty.write(prompt)
-        except Exception:
-            print(prompt, end="", file=sys.stderr, flush=True)
-        username = sys.stdin.readline().strip()
-    password = getpass() if sys.stdin.isatty() else sys.stdin.readline().strip()
-    try:
-        return _get_jwt_token(base_url, username, password)
-    except ClientError as e:
-        raise SystemExit(f"error logging in: {e.args[0]}") from e
-
-
 def get_client(args: argparse.Namespace) -> Client:
     """Return a smartextract client based on CLI options."""
     timeout = args.timeout if args.timeout > 0 else None
-    api_key = os.getenv("SMARTEXTRACT_API_KEY") or get_access_token(args.base_url, None)
-    return Client(api_key=api_key, timeout=timeout, base_url=args.base_url)
+    api_key = os.getenv("SMARTEXTRACT_API_KEY")
+    return Client(
+        api_key=api_key,
+        timeout=timeout,
+        base_url=args.base_url,
+        token_file=args.token_file,
+    )
 
 
 def pygments_formatter(args: argparse.Namespace) -> str | None:
@@ -189,6 +167,13 @@ cli.add_argument(
     type=str,
     metavar="URL",
     help="base URL of the API",
+)
+cli.add_argument(
+    "--token-file",
+    default=None,
+    type=pathlib.Path,
+    metavar="TOKEN_FILE",
+    help="file containing a cached OAuth token",
 )
 cli.add_argument(
     "--timeout",
@@ -732,19 +717,20 @@ delete_document.add_argument("document", help="ID of the document")
 
 ### Miscellaneous
 
-login = subcommand(
-    "login",
+
+def do_logout(args):
+    """Revoke and delete a saved OAuth token."""
+    from smartextract._oauth import OAuth2Auth
+
+    auth = OAuth2Auth(args.base_url, args.token_file)
+    asyncio.run(auth.oauth_logout())
+
+
+logout = subcommand(
+    "logout",
     group="Miscellaneous",
-    description="Print a temporary API key.",
-    handler=lambda args: print(
-        get_access_token(args.base_url, args.username),
-        file=args.output_file,
-    ),
-)
-login.add_argument(
-    "username",
-    nargs="?",
-    help="user's email (if omitted, ask interactively)",
+    description="Revoke an remove an existing OAuth token.",
+    handler=do_logout,
 )
 
 
@@ -772,7 +758,7 @@ def do_request(args: argparse.Namespace) -> None:
         dump(r.json())
 
 
-login = subcommand(
+request = subcommand(
     "request",
     group="Miscellaneous",
     description="""\
@@ -782,16 +768,16 @@ This should be used only for debugging purposes.
 """,
     handler=do_request,
 )
-login.add_argument(
+request.add_argument(
     "endpoint",
 )
-login.add_argument(
+request.add_argument(
     "-m",
     "--method",
     help="request method, such as GET, POST, PUT, PATCH, DELETE"
     " (default: GET, or POST if a request body is included)",
 )
-login.add_argument(
+request.add_argument(
     "-p",
     "--param",
     help="query parameters to include in the request URL",
@@ -799,7 +785,7 @@ login.add_argument(
     metavar="KEY=VALUE",
     type=key_value_argument,
 )
-login.add_argument(
+request.add_argument(
     "-f",
     "--file",
     help="form file to include in the request body",
@@ -809,7 +795,7 @@ login.add_argument(
         (kv := key_value_argument(arg)) and (kv[0], argparse.FileType("rb")(kv[1]))
     ),
 )
-login.add_argument(
+request.add_argument(
     "-j",
     "--json",
     help=f"request body data, {json_argument_help}",
@@ -854,6 +840,8 @@ completion.add_argument(
     nargs="?",
     help="shell type (bash, zsh, fish or powershell; if omitted, try to guess)",
 )
+
+
 ## Final considerations
 
 # Construct epilog message

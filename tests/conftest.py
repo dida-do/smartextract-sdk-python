@@ -8,8 +8,7 @@ import pytest
 from smartextract import AsyncClient, Client
 
 client_args = dict(  # noqa: C408
-    username=os.getenv("SMARTEXTRACT_TEST_USERNAME"),
-    password=os.getenv("SMARTEXTRACT_TEST_PASSWORD"),
+    api_key=os.getenv("SMARTEXTRACT_TEST_API_KEY"),
     base_url=os.getenv("SMARTEXTRACT_TEST_BASE_URL"),
 )
 
