@@ -11,8 +11,11 @@ for Python applications.
 This package requires Python 3.9 or higher and is available from PyPI:
 
 ```sh
-pip install smartextract
+pip install smartextract[oauth,cli-extras]
 ```
+
+You can leave out `oauth` and `cli-extras` if you don't plan to use those
+features.
 
 ## Usage
 
@@ -21,13 +24,14 @@ have signed up at <https://app.smartextract.ai/>.  Then, try the following:
 
 ```python
 import smartextract
-client = smartextract.Client(username=YOUR_USERNAME, password=YOUR_PASSWORD)
+client = smartextract.Client()
 info = client.get_user_info()
 print(info)
 ```
 
 You may also generate an [API key](https://app.smartextract.ai/settings/api-keys)
-and use it instead of your username and password to initialize the client.
+and pass it as an argument when initializing the client.  This is necessary if
+you want to avoid the interactive login via web browser.
 
 For more information, use your IDE to explore the methods of the `Client` object or
 refer to the [user guide](https://docs.smartextract.ai/guide).
@@ -55,16 +59,9 @@ smartextract --help
 
 for more information on all available commands and switches.
 
-To avoid typing your username and password every time, generate an [API
-key](https://app.smartextract.ai/settings/api-keys) and set your environment
-variable `SMARTEXTRACT_API_KEY`.  Alternatively, you can use short-lived API
-tokens, for example like this:
-
-```sh
-export SMARTEXTRACT_API_KEY="$(smartextract login YOUR_USERNAME)"
-# or, to avoid typing your password interactively
-export SMARTEXTRACT_API_KEY="$(cat my-password.txt | smartextract login YOUR_USERNAME)"
-```
+If you want to use an API key instead of the interactive OAuth authentication,
+generate an [API key](https://app.smartextract.ai/settings/api-keys) and set
+your environment variable `SMARTEXTRACT_API_KEY`.
 
 Finally, see `smartextract completion --help` for instructions on how to set up
 command-line completion in your shell.
