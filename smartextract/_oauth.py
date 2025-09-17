@@ -38,11 +38,11 @@ class OAuth2Auth(httpx.Auth):
 
     @functools.cached_property
     def oauth_client(self) -> BaseOAuth2:
+        with httpx.Client(base_url=self.base_url, follow_redirects=True) as client:
+            r = client.get("/auth")
+        r.raise_for_status()
         return OpenID(
-            openid_configuration_endpoint=urljoin(
-                self.base_url.replace("api.", "auth."),
-                "auth/realms/smartextract/.well-known/openid-configuration",
-            ),
+            openid_configuration_endpoint=f"{r.url}/.well-known/openid-configuration",
             client_id="smartextract-sdk",
             client_secret="",
         )
