@@ -114,31 +114,21 @@ def get_dumper(args: argparse.Namespace) -> Callable:
 
 def json_argument(data_or_file: str) -> JsonValue:
     """A CLI argument type accepting a file name and returning its content as JSON."""
-    if data_or_file.startswith("@"):
-        file = argparse.FileType("r")(data_or_file[1:])
-    else:
-        file = None
+    try:
+        return json.loads(data_or_file)
+    except json.JSONDecodeError:
+        file = argparse.FileType("r")(data_or_file)
     try:
         return json.load(file) if file else json.loads(data_or_file)
     except Exception as e:
-        where = file.name if file else "command line"
         raise argparse.ArgumentTypeError(
-            f"Error reading JSON data from {where}: {e}"
+            f"Error reading JSON data from {file.name}: {e}"
         ) from e
 
 
-json_argument_help = "either a literal JSON value or @FILENAME to read from a file"
+json_argument_help = "either a literal JSON value or a file to read"
 
-
-def template_argument(template: str) -> JsonValue:
-    """CLI type for extraction templates (template ID of JSON file name)."""
-    return template[1:] if template.startswith("#") else json_argument(template)
-
-
-template_argument_help = (
-    "extraction template (literal JSON value or #NAME.LANG to use"
-    " a predefined template or @FILENAME to read from a file)"
-)
+template_argument_help = f"extraction template, {json_argument_help}"
 
 
 def key_value_argument(s: str) -> tuple[str, str]:
@@ -448,7 +438,7 @@ create_template_pipeline.add_argument(
 )
 create_template_pipeline.add_argument(
     "template",
-    type=template_argument,
+    type=json_argument,
     help=template_argument_help,
 )
 create_template_pipeline.add_argument("--ocr", help="ID or alias of OCR resource")
@@ -483,7 +473,7 @@ modify_pipeline.add_argument(
 )
 modify_pipeline.add_argument(
     "--template",
-    type=template_argument,
+    type=json_argument,
     help=template_argument_help,
 )
 modify_pipeline.add_argument("--ocr", help="ID or alias of OCR resource")
@@ -533,7 +523,7 @@ run_anonymous_pipeline.add_argument(
 run_anonymous_pipeline.add_argument(
     "-t",
     "--template",
-    type=template_argument,
+    type=json_argument,
     help=template_argument_help,
 )
 
