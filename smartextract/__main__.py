@@ -11,6 +11,7 @@ import os
 import pathlib
 import sys
 from collections.abc import Callable
+from enum import Enum
 from typing import Any
 
 from pydantic import JsonValue, TypeAdapter
@@ -112,7 +113,7 @@ def get_dumper(args: argparse.Namespace) -> Callable:
     return dump
 
 
-def json_argument(data_or_file: str) -> JsonValue:
+def json_data(data_or_file: str) -> JsonValue:
     """A CLI argument type accepting a file name and returning its content as JSON."""
     try:
         return json.loads(data_or_file)
@@ -141,9 +142,26 @@ def key_value_argument(s: str) -> tuple[str, str]:
 
 ## CLI definition
 
+
+class HelpFormatter(argparse.RawDescriptionHelpFormatter):
+    """Help formatter with nice metavar names."""
+
+    def _get_default_metavar_for_optional(self, action):
+        if action.help and action.help.startswith("ID or alias"):
+            return "ID"
+        if isinstance(action.type, type) and issubclass(action.type, Enum):
+            return "{" + ",".join(str(v.value) for v in action.type) + "}"
+        if isinstance(action.type, argparse.FileType):
+            return "FILE"
+        type_name = getattr(action.type, "__name__", None)
+        if type_name:
+            return type_name.upper()
+        return action.dest.upper()
+
+
 cli = argparse.ArgumentParser(
     description="Make requests to the smartextract API.",
-    formatter_class=argparse.RawDescriptionHelpFormatter,
+    formatter_class=HelpFormatter,
 )
 cli.add_argument(
     "-v",
@@ -216,7 +234,7 @@ def subcommand(
     subcmd = subcommands.add_parser(
         name,
         aliases=aliases,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
+        formatter_class=HelpFormatter,
         **kwargs,
     )
     subcmd.set_defaults(handler=handler)
@@ -265,11 +283,12 @@ set_user_credits = subcommand(
     handler=do_set_user_credits,
 )
 set_user_credits.add_argument("username", help="email or ID of the user")
-set_user_credits.add_argument("--balance", "-b", help="set a new balance")
+set_user_credits.add_argument("--balance", "-b", help="set a new balance", type=int)
 set_user_credits.add_argument(
     "-c",
     "--new-credits",
     help="add credits to current balance",
+    type=int,
 )
 set_user_credits.add_argument(
     "-s",
@@ -305,7 +324,7 @@ get_resource_info = subcommand(
         get_client(args).get_resource_info(args.id_or_alias)
     ),
 )
-get_resource_info.add_argument("id_or_alias", help="Resource UUID or resource alias")
+get_resource_info.add_argument("id_or_alias", help="resource ID or alias")
 
 list_resources = subcommand(
     "list-resources",
@@ -328,7 +347,7 @@ list_resources.add_argument(
         "openai_chat",
         "inbox",
     ],
-    help="Filter by resource type.",
+    help="filter by resource type",
 )
 
 list_lua_pipelines = subcommand(
@@ -363,7 +382,7 @@ list_permissions = subcommand(
         get_client(args).list_permissions(args.id_or_alias)
     ),
 )
-list_permissions.add_argument("id_or_alias", help="Resource UUID or resource alias")
+list_permissions.add_argument("id_or_alias", help="resource ID or alias")
 
 
 def _do_create_permission(args):
@@ -438,7 +457,7 @@ create_template_pipeline.add_argument(
 )
 create_template_pipeline.add_argument(
     "template",
-    type=json_argument,
+    type=json_data,
     help=template_argument_help,
 )
 create_template_pipeline.add_argument("--ocr", help="ID or alias of OCR resource")
@@ -465,7 +484,7 @@ Any details not provided as a switch are left unchanged.
     ),
 )
 modify_pipeline.add_argument(
-    "pipeline", help="ID or alias of the pipeline to be changed."
+    "pipeline", help="ID or alias of the pipeline to be changed"
 )
 modify_pipeline.add_argument("--name", help="a new name for the pipeline")
 modify_pipeline.add_argument(
@@ -473,7 +492,7 @@ modify_pipeline.add_argument(
 )
 modify_pipeline.add_argument(
     "--template",
-    type=json_argument,
+    type=json_data,
     help=template_argument_help,
 )
 modify_pipeline.add_argument("--ocr", help="ID or alias of OCR resource")
@@ -484,7 +503,7 @@ modify_pipeline.add_argument(
 modify_pipeline.add_argument(
     "--use-vision",
     action=argparse.BooleanOptionalAction,
-    help="Enable or disable LLM vision.",
+    help="enable or disable LLM vision",
 )
 
 
@@ -523,7 +542,7 @@ run_anonymous_pipeline.add_argument(
 run_anonymous_pipeline.add_argument(
     "-t",
     "--template",
-    type=json_argument,
+    type=json_data,
     help=template_argument_help,
 )
 
@@ -564,7 +583,7 @@ create_inbox = subcommand(
         get_client(args).create_inbox(args.name, args.pipeline, ocr_id=args.ocr)
     ),
 )
-create_inbox.add_argument("name", help="Name of the inbox.")
+create_inbox.add_argument("name", help="name of the inbox")
 create_inbox.add_argument("pipeline", help="ID or alias of the extraction pipeline")
 create_inbox.add_argument("--ocr", help="OCR used for document display in the web UI")
 
@@ -586,9 +605,9 @@ recomputed.
     ),
 )
 modify_inbox.add_argument("inbox", help="ID of the inbox")
-modify_inbox.add_argument("--name", help="New name of the inbox")
+modify_inbox.add_argument("--name", help="new name of the inbox")
 modify_inbox.add_argument("--pipeline", help="ID of the extraction pipeline")
-modify_inbox.add_argument("--ocr", help="OCR used in document display in frontend.")
+modify_inbox.add_argument("--ocr", help="OCR used in document display in frontend")
 
 
 create_document = subcommand(
@@ -610,12 +629,10 @@ create_document.add_argument(
 list_documents = subcommand(
     "list-documents",
     group="Inboxes",
-    description="List documents in the inbox.",
+    description="List documents in the given inbox.",
     handler=lambda args: get_dumper(args)(get_client(args).list_documents(args.inbox)),
 )
-list_documents.add_argument(
-    "inbox", help="Specify UUID of the inbox containing the documents."
-)
+list_documents.add_argument("inbox", help="ID or alist of the inbox")
 
 
 list_extractions = subcommand(
@@ -635,7 +652,7 @@ list_inbox_jobs = subcommand(
     description="List pipeline runs triggered by documents of the inbox.",
     handler=lambda args: get_dumper(args)(get_client(args).list_inbox_jobs(args.inbox)),
 )
-list_inbox_jobs.add_argument("inbox", help="ID of the inbox.")
+list_inbox_jobs.add_argument("inbox", help="ID of the inbox")
 
 ### Documents
 
@@ -692,7 +709,7 @@ set_document_extraction = subcommand(
 set_document_extraction.add_argument("document", help="ID of the document")
 set_document_extraction.add_argument(
     "extraction",
-    type=json_argument,
+    type=json_data,
     help=f"new extraction data, {json_argument_help}",
 )
 
@@ -804,7 +821,7 @@ request.add_argument(
     "-j",
     "--json",
     help=f"request body data, {json_argument_help}",
-    type=json_argument,
+    type=json_data,
 )
 
 
