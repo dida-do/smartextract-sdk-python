@@ -746,16 +746,23 @@ def do_request(args: argparse.Namespace) -> None:
         )
     method = args.method or ("POST" if (args.file or args.json) else "GET")
     params = dict(args.param) if args.param else None
+    headers = dict(args.header) if args.header else None
     files = dict(args.file) if args.file else None
     r = client._request(
         method,
         args.endpoint,
+        headers=headers,
         params=params,
         files=files,
         json=args.json,
     )
-    if r.headers.get("content-type") == "application/json":
+    content_type = r.headers.get("content-type")
+    if content_type == "application/json":
         dump(r.json())
+    elif args.output_file.isatty():
+        raise SystemExit(f"Use --output-file to save {content_type} content to a file")
+    else:
+        args.output_file.buffer.write(r.content)
 
 
 request = subcommand(
@@ -776,6 +783,14 @@ request.add_argument(
     "--method",
     help="request method, such as GET, POST, PUT, PATCH, DELETE"
     " (default: GET, or POST if a request body is included)",
+)
+request.add_argument(
+    "-H",
+    "--header",
+    help="extra headers to include in the request",
+    action="append",
+    metavar="KEY=VALUE",
+    type=key_value_argument,
 )
 request.add_argument(
     "-p",
