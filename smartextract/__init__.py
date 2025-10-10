@@ -31,7 +31,7 @@ from urllib.parse import quote as url_quote
 from uuid import UUID
 
 import httpx
-from pydantic import BaseModel, EmailStr, Field, JsonValue
+from pydantic import AliasPath, BaseModel, EmailStr, Field, JsonValue
 
 if TYPE_CHECKING:
     from typing import Self  # For Python ≤ 3.10
@@ -215,10 +215,16 @@ class TemplateInfo(BaseInfo):
 
     id: str = Field(
         description="Template identifier, in the document_type.language form.",
-        examples=["invoice.en", "bank_statement.de"],
+        examples=["invoice", "bank_statement"],
     )
-    name: str = Field(description="Localized name of the template.")
-    description: str = Field(description="Localized description of the template.")
+    name: str = Field(
+        description="Localized name of the template.",
+        validation_alias=AliasPath("display_name", "en"),
+    )
+    description: str = Field(
+        description="Localized description of the template.",
+        validation_alias=AliasPath("description", "en"),
+    )
     categories: list = Field(
         description="List of business domains relevant to this template."
     )
@@ -408,7 +414,7 @@ class AsyncClient:
     async def list_templates(self, language: Language = "en") -> list[TemplateInfo]:
         """List all available templates in format name.language."""
         r = await self._request("GET", "/templates", params={"lang": language})
-        return [TemplateInfo(**template) for template in r.json()]
+        return [TemplateInfo.model_validate(v) for v in r.json()]
 
     async def get_user_info(self, user: str = "me") -> UserInfo:
         """Request stored information and credit balance of a given user."""
@@ -979,7 +985,7 @@ class Client:
     def list_templates(self, language: Language = "en") -> list[TemplateInfo]:
         """List all available templates in format name.language."""
         r = self._request("GET", "/templates", params={"lang": language})
-        return [TemplateInfo(**template) for template in r.json()]
+        return [TemplateInfo.model_validate(v) for v in r.json()]
 
     def get_user_info(self, user: str = "me") -> UserInfo:
         """Request stored information and credit balance of a given user."""
