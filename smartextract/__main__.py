@@ -435,6 +435,11 @@ create_lua_pipeline.add_argument(
     "-n", "--name", default="Lua pipeline", help="name of the new pipeline"
 )
 create_lua_pipeline.add_argument(
+    "--template",
+    type=json_data,
+    help=template_argument_help,
+)
+create_lua_pipeline.add_argument(
     "script", help="path of the Lua script", type=argparse.FileType("r")
 )
 
@@ -449,6 +454,7 @@ create_template_pipeline = subcommand(
             args.template,
             ocr_id=args.ocr,
             chat_id=args.chat,
+            use_vision=args.use_vision,
         )
     ),
 )
@@ -462,6 +468,11 @@ create_template_pipeline.add_argument(
 )
 create_template_pipeline.add_argument("--ocr", help="ID or alias of OCR resource")
 create_template_pipeline.add_argument("--chat", help="ID or alias of extraction LLM")
+create_template_pipeline.add_argument(
+    "--use-vision",
+    action=argparse.BooleanOptionalAction,
+    help="enable or disable LLM vision",
+)
 
 
 modify_pipeline = subcommand(

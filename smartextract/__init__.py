@@ -605,6 +605,7 @@ class AsyncClient:
         name: str,
         code: str,
         *,
+        template: str | None = None,
         permissions: Optional[dict[str, AccessLevel]] = None,
     ) -> UUID:
         """Create a new pipeline by providing a lua script.
@@ -617,7 +618,12 @@ class AsyncClient:
         r = await self._request(
             "POST",
             "/pipelines",
-            json=drop_none(name=name, code=code, permissions=permissions),
+            json=drop_none(
+                name=name,
+                code=code,
+                template=template,
+                permissions=permissions,
+            ),
         )
         return UUID(r.json()["id"])
 
@@ -1172,6 +1178,7 @@ class Client:
         name: str,
         code: str,
         *,
+        template: str | None = None,
         permissions: Optional[dict[str, AccessLevel]] = None,
     ) -> UUID:
         """Create a new pipeline by providing a lua script.
@@ -1184,7 +1191,12 @@ class Client:
         r = self._request(
             "POST",
             "/pipelines",
-            json=drop_none(name=name, code=code, permissions=permissions),
+            json=drop_none(
+                name=name,
+                code=code,
+                template=template,
+                permissions=permissions,
+            ),
         )
         return UUID(r.json()["id"])
 
