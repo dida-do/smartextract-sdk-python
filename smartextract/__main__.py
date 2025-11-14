@@ -591,12 +591,18 @@ create_inbox = subcommand(
     group="Inboxes",
     description="Create an inbox to store and process documents.",
     handler=lambda args: get_dumper(args)(
-        get_client(args).create_inbox(args.name, args.pipeline, ocr_id=args.ocr)
+        get_client(args).create_inbox(
+            args.name,
+            args.pipeline,
+            ocr_id=args.ocr,
+            postprocessor_id=args.postprocessor,
+        )
     ),
 )
 create_inbox.add_argument("name", help="name of the inbox")
-create_inbox.add_argument("pipeline", help="ID or alias of the extraction pipeline")
+create_inbox.add_argument("pipeline", help="ID of the extraction pipeline")
 create_inbox.add_argument("--ocr", help="OCR used for document display in the web UI")
+create_inbox.add_argument("--postprocessor", help="ID of the postprocessing pipeline")
 
 
 modify_inbox = subcommand(
@@ -613,12 +619,14 @@ recomputed.
         name=args.name,
         ocr_id=args.ocr,
         pipeline_id=args.pipeline,
+        postprocessor_id=args.postprocessor,
     ),
 )
 modify_inbox.add_argument("inbox", help="ID of the inbox")
 modify_inbox.add_argument("--name", help="new name of the inbox")
-modify_inbox.add_argument("--pipeline", help="ID of the extraction pipeline")
 modify_inbox.add_argument("--ocr", help="OCR used in document display in frontend")
+modify_inbox.add_argument("--pipeline", help="ID of the extraction pipeline")
+modify_inbox.add_argument("--postprocessor", help="ID of the postprocessing pipeline")
 
 
 create_document = subcommand(
@@ -777,7 +785,7 @@ def do_request(args: argparse.Namespace) -> None:
     content_type = r.headers.get("content-type")
     if content_type == "application/json":
         dump(r.json())
-    elif args.output_file.isatty():
+    elif r.content and args.output_file.isatty():
         raise SystemExit(f"Use --output-file to save {content_type} content to a file")
     else:
         args.output_file.buffer.write(r.content)

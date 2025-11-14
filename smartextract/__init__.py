@@ -785,7 +785,12 @@ class AsyncClient:
         return Page[JobInfo].from_response(r)
 
     async def create_inbox(
-        self, name: str, pipeline_id: str, *, ocr_id: Optional[str] = None
+        self,
+        name: str,
+        pipeline_id: str,
+        *,
+        ocr_id: Optional[ResourceID] = None,
+        postprocessor_id: Optional[ResourceID] = None,
     ) -> UUID:
         """Create container for storing documents of common type.
 
@@ -794,7 +799,12 @@ class AsyncClient:
         r = await self._request(
             "POST",
             "/inboxes",
-            json=drop_none(name=name, pipeline_id=pipeline_id, ocr_id=ocr_id),
+            json=drop_none(
+                name=name,
+                pipeline_id=pipeline_id,
+                ocr_id=ocr_id,
+                postprocessor_id=postprocessor_id,
+            ),
         )
         return UUID(r.json()["id"])
 
@@ -803,8 +813,9 @@ class AsyncClient:
         inbox_id: ResourceID,
         *,
         name: Optional[str] = None,
-        pipeline_id: Optional[ResourceID] = None,
         ocr_id: Optional[ResourceID] = None,
+        pipeline_id: Optional[ResourceID] = None,
+        postprocessor_id: Optional[ResourceID] = None,
     ) -> None:
         """Set new pipeline for an inbox."""
         await self._request(
@@ -812,8 +823,9 @@ class AsyncClient:
             f"/inboxes/{inbox_id}",
             json=drop_none(
                 name=name,
-                pipeline_id=pipeline_id,
                 ocr_id=ocr_id,
+                pipeline_id=pipeline_id,
+                postprocessor_id=postprocessor_id,
             ),
         )
 
@@ -1358,7 +1370,12 @@ class Client:
         return Page[JobInfo].from_response(r)
 
     def create_inbox(
-        self, name: str, pipeline_id: str, *, ocr_id: Optional[str] = None
+        self,
+        name: str,
+        pipeline_id: str,
+        *,
+        ocr_id: Optional[ResourceID] = None,
+        postprocessor_id: Optional[ResourceID] = None,
     ) -> UUID:
         """Create container for storing documents of common type.
 
@@ -1367,7 +1384,12 @@ class Client:
         r = self._request(
             "POST",
             "/inboxes",
-            json=drop_none(name=name, pipeline_id=pipeline_id, ocr_id=ocr_id),
+            json=drop_none(
+                name=name,
+                pipeline_id=pipeline_id,
+                ocr_id=ocr_id,
+                postprocessor_id=postprocessor_id,
+            ),
         )
         return UUID(r.json()["id"])
 
@@ -1376,8 +1398,9 @@ class Client:
         inbox_id: ResourceID,
         *,
         name: Optional[str] = None,
-        pipeline_id: Optional[ResourceID] = None,
         ocr_id: Optional[ResourceID] = None,
+        pipeline_id: Optional[ResourceID] = None,
+        postprocessor_id: Optional[ResourceID] = None,
     ) -> None:
         """Set new pipeline for an inbox."""
         self._request(
@@ -1385,8 +1408,9 @@ class Client:
             f"/inboxes/{inbox_id}",
             json=drop_none(
                 name=name,
-                pipeline_id=pipeline_id,
                 ocr_id=ocr_id,
+                pipeline_id=pipeline_id,
+                postprocessor_id=postprocessor_id,
             ),
         )
 
