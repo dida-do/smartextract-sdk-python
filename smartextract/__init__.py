@@ -210,6 +210,14 @@ class TemplatePipelineInfo(ResourceInfo):
     use_vision: bool = Field(description="Whether to use LLM vision in this pipeline.")
 
 
+class DatasetInfo(ResourceInfo):
+    """Information about a dataset."""
+
+    embedding_id: Optional[UUID] = Field(
+        default=None, description="The embedding model attached to this dataset."
+    )
+
+
 class TemplateInfo(BaseInfo):
     """Information about an extraction template."""
 
@@ -573,6 +581,9 @@ class AsyncClient:
         if info["type"] == "inbox":
             r = await self._request("GET", f"/inboxes/{resource_id}")
             return InboxInfo.from_response(r)
+        if info["type"] == "dataset":
+            r = await self._request("GET", f"/datasets/{resource_id}")
+            return DatasetInfo.from_response(r)
         return ResourceInfo(**info)
 
     async def list_permissions(
@@ -941,17 +952,48 @@ class AsyncClient:
             "POST", f"/documents/{document_id}/extraction", json=extraction
         )
 
-    async def create_dataset_item(
-        self, dataset_id: ResourceID, key: str, value: JsonValue
-    ):
-        """Add item to a dataset."""
-        key = url_quote(key)
-        await self._request("POST", f"/datasets/{dataset_id}/items/{key}", json=value)
+    async def create_dataset(
+        self,
+        name: str,
+        *,
+        embedding_id: ResourceID | None = None,
+        permissions: Optional[dict[str, AccessLevel]] = None,
+    ) -> UUID:
+        """Create a new dataset."""
+        r = await self._request(
+            "POST",
+            "/datasets",
+            json=drop_none(
+                name=name,
+                embedding_id=embedding_id,
+                permissions=permissions,
+            ),
+        )
+        return UUID(r.json()["id"])
 
-    async def delete_dataset_item(self, dataset_id: ResourceID, key: str):
-        """Add item to a dataset."""
-        key = url_quote(key)
-        await self._request("DELETE", f"/datasets/{dataset_id}/items/{key}")
+    async def create_dataset_items(
+        self,
+        dataset_id: ResourceID,
+        items: dict[str, JsonValue],
+    ):
+        """Add a batch of items to a dataset."""
+        await self._request(
+            "POST",
+            f"/datasets/{dataset_id}/items",
+            json=[{"key": k, "value": v} for k, v in items.items()],
+        )
+
+    async def delete_dataset_items(self, dataset_id: ResourceID, keys: list[str]):
+        """Delete dataset items."""
+        await self._request(
+            "POST",
+            f"/datasets/{dataset_id}/items",
+            json=[{"key": k, "value": None} for k in keys],
+        )
+
+    async def clear_dataset(self, dataset_id: ResourceID):
+        """Delete all dataset items."""
+        await self._request("DELETE", f"/datasets/{dataset_id}/items")
 
     # end of code template
 
@@ -1158,6 +1200,9 @@ class Client:
         if info["type"] == "inbox":
             r = self._request("GET", f"/inboxes/{resource_id}")
             return InboxInfo.from_response(r)
+        if info["type"] == "dataset":
+            r = self._request("GET", f"/datasets/{resource_id}")
+            return DatasetInfo.from_response(r)
         return ResourceInfo(**info)
 
     def list_permissions(
@@ -1524,14 +1569,47 @@ class Client:
         """Manually override the extraction data of the given document."""
         self._request("POST", f"/documents/{document_id}/extraction", json=extraction)
 
-    def create_dataset_item(self, dataset_id: ResourceID, key: str, value: JsonValue):
-        """Add item to a dataset."""
-        key = url_quote(key)
-        self._request("POST", f"/datasets/{dataset_id}/items/{key}", json=value)
+    def create_dataset(
+        self,
+        name: str,
+        *,
+        embedding_id: ResourceID | None = None,
+        permissions: Optional[dict[str, AccessLevel]] = None,
+    ) -> UUID:
+        """Create a new dataset."""
+        r = self._request(
+            "POST",
+            "/datasets",
+            json=drop_none(
+                name=name,
+                embedding_id=embedding_id,
+                permissions=permissions,
+            ),
+        )
+        return UUID(r.json()["id"])
 
-    def delete_dataset_item(self, dataset_id: ResourceID, key: str):
-        """Add item to a dataset."""
-        key = url_quote(key)
-        self._request("DELETE", f"/datasets/{dataset_id}/items/{key}")
+    def create_dataset_items(
+        self,
+        dataset_id: ResourceID,
+        items: dict[str, JsonValue],
+    ):
+        """Add a batch of items to a dataset."""
+        self._request(
+            "POST",
+            f"/datasets/{dataset_id}/items",
+            json=[{"key": k, "value": v} for k, v in items.items()],
+        )
+
+    def delete_dataset_items(self, dataset_id: ResourceID, keys: list[str]):
+        """Delete dataset items."""
+        self._request(
+            "POST",
+            f"/datasets/{dataset_id}/items",
+            json=[{"key": k, "value": None} for k in keys],
+        )
+
+    def clear_dataset(self, dataset_id: ResourceID):
+        """Delete all dataset items."""
+        self._request("DELETE", f"/datasets/{dataset_id}/items")
 
     # end of generated code
