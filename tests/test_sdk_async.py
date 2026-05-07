@@ -130,7 +130,6 @@ async def test_get_resource_info(
     assert isinstance(inbox, InboxInfo)
     assert inbox.name == "Test Inbox"
     assert inbox.pipeline_id == lua_pipeline_id
-    assert inbox.document_count >= 1
 
 
 async def test_list_permissions(aclient: AsyncClient, inbox_id, my_email):
@@ -296,7 +295,6 @@ async def test_create_inbox(aclient: AsyncClient, lua_pipeline_id, ocr_alias):
     inbox_info = await aclient.get_resource_info(str(inbox_id))
     assert inbox_info.type == "inbox"
     assert inbox_info.name == name
-    assert inbox_info.document_count == 0
     assert inbox_info.pipeline_id == lua_pipeline_id
     # Don't test if inbox_info.ocr_id is ocr_alias
 

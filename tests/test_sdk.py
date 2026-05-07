@@ -137,7 +137,6 @@ def test_get_resource_info(
     assert isinstance(inbox, InboxInfo)
     assert inbox.name == "Test Inbox"
     assert inbox.pipeline_id == lua_pipeline_id
-    assert inbox.document_count >= 1
 
 
 def test_list_permissions(client, inbox_id, my_email):
@@ -310,7 +309,6 @@ def test_create_inbox(client, lua_pipeline_id, ocr_alias):
 
     assert inbox_info.type == "inbox"
     assert inbox_info.name == name
-    assert inbox_info.document_count == 0
     assert inbox_info.pipeline_id == lua_pipeline_id
     # Don't test if inbox_info.ocr_id is ocr_alias
 

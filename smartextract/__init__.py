@@ -246,7 +246,6 @@ class InboxInfo(ResourceInfo):
     may be associated to multiple inboxes).
     """
 
-    document_count: int = Field(description="Total number of documents in the inbox.")
     pipeline_id: UUID = Field(
         description="Pipeline used to process documents in the inbox."
     )
