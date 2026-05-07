@@ -8,7 +8,7 @@ for Python applications.
 
 ## Installation
 
-This package requires Python 3.9 or higher and is available from PyPI:
+This package requires Python 3.10 or higher and is available from PyPI:
 
 ```sh
 pip install smartextract[oauth,cli-extras]
