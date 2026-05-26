@@ -942,6 +942,7 @@ class AsyncClient:
         name: str,
         *,
         embedding_id: ResourceID | None = None,
+        primary_key: str | None = None,
         permissions: Optional[dict[str, AccessLevel]] = None,
     ) -> UUID:
         """Create a new dataset."""
@@ -951,34 +952,64 @@ class AsyncClient:
             json=drop_none(
                 name=name,
                 embedding_id=embedding_id,
+                primary_key=primary_key,
                 permissions=permissions,
             ),
         )
         return UUID(r.json()["id"])
 
-    async def create_dataset_items(
+    async def get_dataset_items(
         self,
         dataset_id: ResourceID,
-        items: dict[str, JsonValue],
+        *,
+        key_prefix: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
     ):
         """Add a batch of items to a dataset."""
         await self._request(
-            "POST",
+            "GET",
             f"/datasets/{dataset_id}/items",
-            json=[{"key": k, "value": v} for k, v in items.items()],
+            json=drop_none(
+                key_prefix=key_prefix,
+                limit=limit,
+                offset=offset,
+            ),
         )
 
-    async def delete_dataset_items(self, dataset_id: ResourceID, keys: list[str]):
-        """Delete dataset items."""
+    async def create_dataset_items(
+        self,
+        dataset_id: ResourceID,
+        items: list[JsonValue],
+    ):
+        """Add a batch of items to a dataset."""
+        await self._request("POST", f"/datasets/{dataset_id}/items", json=items)
+
+    async def delete_dataset_items(
+        self,
+        dataset_id: ResourceID,
+        keys: list[str] | None = None,
+        *,
+        key_prefix: str | None = None,
+    ):
+        """Delete items from the dataset with the given id.
+
+        You should supply either a list of keys, or a key_prefix to
+        batch delete all items with that key prefix (but not both).
+        """
+        if key_prefix == "*":
+            raise ValueError("Use `clear_dataset' to remove all dataset items.")
         await self._request(
-            "POST",
+            "DELETE",
             f"/datasets/{dataset_id}/items",
-            json=[{"key": k, "value": None} for k in keys],
+            params=drop_none(key=keys, key_prefix=key_prefix),
         )
 
     async def clear_dataset(self, dataset_id: ResourceID):
         """Delete all dataset items."""
-        await self._request("DELETE", f"/datasets/{dataset_id}/items")
+        await self._request(
+            "DELETE", f"/datasets/{dataset_id}/items", params={"key_prefix": "*"}
+        )
 
     # end of code template
 
@@ -1550,6 +1581,7 @@ class Client:
         name: str,
         *,
         embedding_id: ResourceID | None = None,
+        primary_key: str | None = None,
         permissions: Optional[dict[str, AccessLevel]] = None,
     ) -> UUID:
         """Create a new dataset."""
@@ -1559,33 +1591,63 @@ class Client:
             json=drop_none(
                 name=name,
                 embedding_id=embedding_id,
+                primary_key=primary_key,
                 permissions=permissions,
             ),
         )
         return UUID(r.json()["id"])
 
-    def create_dataset_items(
+    def get_dataset_items(
         self,
         dataset_id: ResourceID,
-        items: dict[str, JsonValue],
+        *,
+        key_prefix: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
     ):
         """Add a batch of items to a dataset."""
         self._request(
-            "POST",
+            "GET",
             f"/datasets/{dataset_id}/items",
-            json=[{"key": k, "value": v} for k, v in items.items()],
+            json=drop_none(
+                key_prefix=key_prefix,
+                limit=limit,
+                offset=offset,
+            ),
         )
 
-    def delete_dataset_items(self, dataset_id: ResourceID, keys: list[str]):
-        """Delete dataset items."""
+    def create_dataset_items(
+        self,
+        dataset_id: ResourceID,
+        items: list[JsonValue],
+    ):
+        """Add a batch of items to a dataset."""
+        self._request("POST", f"/datasets/{dataset_id}/items", json=items)
+
+    def delete_dataset_items(
+        self,
+        dataset_id: ResourceID,
+        keys: list[str] | None = None,
+        *,
+        key_prefix: str | None = None,
+    ):
+        """Delete items from the dataset with the given id.
+
+        You should supply either a list of keys, or a key_prefix to
+        batch delete all items with that key prefix (but not both).
+        """
+        if key_prefix == "*":
+            raise ValueError("Use `clear_dataset' to remove all dataset items.")
         self._request(
-            "POST",
+            "DELETE",
             f"/datasets/{dataset_id}/items",
-            json=[{"key": k, "value": None} for k in keys],
+            params=drop_none(key=keys, key_prefix=key_prefix),
         )
 
     def clear_dataset(self, dataset_id: ResourceID):
         """Delete all dataset items."""
-        self._request("DELETE", f"/datasets/{dataset_id}/items")
+        self._request(
+            "DELETE", f"/datasets/{dataset_id}/items", params={"key_prefix": "*"}
+        )
 
     # end of generated code

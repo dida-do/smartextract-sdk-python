@@ -737,6 +737,71 @@ delete_document = subcommand(
 )
 delete_document.add_argument("document", help="ID of the document")
 
+
+### Datasets
+
+create_dataset = subcommand(
+    "create-dataset",
+    group="Datasets",
+    aliases=["cds"],
+    description="Create a dataset.",
+    handler=lambda args: get_dumper(args)(
+        get_client(args).create_dataset(
+            name=args.name,
+            embedding_id=args.embed,
+            primary_key=args.primary_key,
+        )
+    ),
+)
+create_dataset.add_argument("name", help="name of the dataset")
+create_dataset.add_argument("--embed", help="ID of the embedding model")
+create_dataset.add_argument(
+    "--primary-key", help="Primary key of the dataset (default: id)."
+)
+
+create_dataset_items = subcommand(
+    "create-dataset-items",
+    group="Datasets",
+    description="Add or update dataset items.",
+    handler=lambda args: get_dumper(args)(
+        get_client(args).create_dataset_items(args.dataset, args.items)
+    ),
+)
+create_dataset_items.add_argument("dataset", help="ID of the dataset")
+set_document_extraction.add_argument(
+    "items",
+    type=json_data,
+    help=f"list of new dataset items, {json_argument_help}",
+)
+
+delete_dataset_items = subcommand(
+    "delete-dataset-items",
+    group="Datasets",
+    description="Delete dataset items.",
+    handler=lambda args: get_dumper(args)(
+        get_client(args).clear_dataset(args.dataset)
+        if args.all
+        else get_client(args).delete_dataset_items(
+            dataset_id=args.dataset,
+            keys=args.keys,
+            key_prefix=args.key_prefix,
+        )
+    ),
+)
+delete_dataset_items.add_argument("dataset", help="ID of the dataset")
+set_document_extraction.add_argument(
+    "--all", action="store_true", help="delete all datset items"
+)
+set_document_extraction.add_argument(
+    "--key_prefix",
+    help="delete all items whose primary key value starts with the given prefix",
+)
+set_document_extraction.add_argument(
+    "--keys",
+    help=f"list of primary keys to delete, {json_argument_help}",
+    type=json_data,
+)
+
 ### Miscellaneous
 
 
