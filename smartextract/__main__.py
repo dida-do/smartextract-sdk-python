@@ -594,14 +594,12 @@ create_inbox = subcommand(
         get_client(args).create_inbox(
             args.name,
             args.pipeline,
-            ocr_id=args.ocr,
             postprocessor_id=args.postprocessor,
         )
     ),
 )
 create_inbox.add_argument("name", help="name of the inbox")
 create_inbox.add_argument("pipeline", help="ID of the extraction pipeline")
-create_inbox.add_argument("--ocr", help="OCR used for document display in the web UI")
 create_inbox.add_argument("--postprocessor", help="ID of the postprocessing pipeline")
 
 
@@ -617,14 +615,12 @@ recomputed.
     handler=lambda args: get_client(args).modify_inbox(
         args.inbox,
         name=args.name,
-        ocr_id=args.ocr,
         pipeline_id=args.pipeline,
         postprocessor_id=args.postprocessor,
     ),
 )
 modify_inbox.add_argument("inbox", help="ID of the inbox")
 modify_inbox.add_argument("--name", help="new name of the inbox")
-modify_inbox.add_argument("--ocr", help="OCR used in document display in frontend")
 modify_inbox.add_argument("--pipeline", help="ID of the extraction pipeline")
 modify_inbox.add_argument("--postprocessor", help="ID of the postprocessing pipeline")
 

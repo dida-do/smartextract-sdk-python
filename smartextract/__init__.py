@@ -249,14 +249,9 @@ class InboxInfo(ResourceInfo):
     pipeline_id: UUID = Field(
         description="Pipeline used to process documents in the inbox."
     )
-    ocr_id: UUID = Field(
-        description="OCR component used to search documents in the inbox."
-        " Ideally (but not necessarily) should match the OCR of the inbox pipeline."
-    )
     postprocessor_id: Optional[UUID] = Field(
         default=None,
-        description="OCR component used to search documents in the inbox."
-        " Ideally (but not necessarily) should match the OCR of the inbox pipeline.",
+        description="Pipeline for assorted postprocessing tasks.",
     )
 
 
@@ -758,25 +753,20 @@ class AsyncClient:
           media_type: The document media type, only required when it
             is not possible to guess.
         """
-        if code is None:
-            if template is None:
-                raise ValueError("Either code or template must be provided")
-            code = json.dumps(template)
-            code_type = "application/json"
-        elif template is None:
-            code_type = "text/lua"
-        else:
-            raise ValueError("Only one of code or template must be provided")
-
+        if code is None and template is None:
+            raise ValueError("Either code or template must be provided")
         filename = _guess_filename(document) or "document"
         media_type = media_type or _guess_media_type(filename)
         r = await self._request(
             "POST",
             "/pipelines/run",
-            files={
-                "document": (filename, document, media_type),
-                "code": ("code", code, code_type),
-            },
+            files=drop_none(
+                document=(filename, document, media_type),
+                code=("code", code, "text/lua") if code else None,
+                template=("template", json.dumps(template), "application/json")
+                if template
+                else None,
+            ),
         )
         return JobResult.from_response(r)
 
@@ -799,7 +789,6 @@ class AsyncClient:
         name: str,
         pipeline_id: str,
         *,
-        ocr_id: Optional[ResourceID] = None,
         postprocessor_id: Optional[ResourceID] = None,
     ) -> UUID:
         """Create container for storing documents of common type.
@@ -812,7 +801,6 @@ class AsyncClient:
             json=drop_none(
                 name=name,
                 pipeline_id=pipeline_id,
-                ocr_id=ocr_id,
                 postprocessor_id=postprocessor_id,
             ),
         )
@@ -823,7 +811,6 @@ class AsyncClient:
         inbox_id: ResourceID,
         *,
         name: Optional[str] = None,
-        ocr_id: Optional[ResourceID] = None,
         pipeline_id: Optional[ResourceID] = None,
         postprocessor_id: Optional[ResourceID] = None,
     ) -> None:
@@ -833,7 +820,6 @@ class AsyncClient:
             f"/inboxes/{inbox_id}",
             json=drop_none(
                 name=name,
-                ocr_id=ocr_id,
                 pipeline_id=pipeline_id,
                 postprocessor_id=postprocessor_id,
             ),
@@ -1377,25 +1363,20 @@ class Client:
           media_type: The document media type, only required when it
             is not possible to guess.
         """
-        if code is None:
-            if template is None:
-                raise ValueError("Either code or template must be provided")
-            code = json.dumps(template)
-            code_type = "application/json"
-        elif template is None:
-            code_type = "text/lua"
-        else:
-            raise ValueError("Only one of code or template must be provided")
-
+        if code is None and template is None:
+            raise ValueError("Either code or template must be provided")
         filename = _guess_filename(document) or "document"
         media_type = media_type or _guess_media_type(filename)
         r = self._request(
             "POST",
             "/pipelines/run",
-            files={
-                "document": (filename, document, media_type),
-                "code": ("code", code, code_type),
-            },
+            files=drop_none(
+                document=(filename, document, media_type),
+                code=("code", code, "text/lua") if code else None,
+                template=("template", json.dumps(template), "application/json")
+                if template
+                else None,
+            ),
         )
         return JobResult.from_response(r)
 
@@ -1418,7 +1399,6 @@ class Client:
         name: str,
         pipeline_id: str,
         *,
-        ocr_id: Optional[ResourceID] = None,
         postprocessor_id: Optional[ResourceID] = None,
     ) -> UUID:
         """Create container for storing documents of common type.
@@ -1431,7 +1411,6 @@ class Client:
             json=drop_none(
                 name=name,
                 pipeline_id=pipeline_id,
-                ocr_id=ocr_id,
                 postprocessor_id=postprocessor_id,
             ),
         )
@@ -1442,7 +1421,6 @@ class Client:
         inbox_id: ResourceID,
         *,
         name: Optional[str] = None,
-        ocr_id: Optional[ResourceID] = None,
         pipeline_id: Optional[ResourceID] = None,
         postprocessor_id: Optional[ResourceID] = None,
     ) -> None:
@@ -1452,7 +1430,6 @@ class Client:
             f"/inboxes/{inbox_id}",
             json=drop_none(
                 name=name,
-                ocr_id=ocr_id,
                 pipeline_id=pipeline_id,
                 postprocessor_id=postprocessor_id,
             ),

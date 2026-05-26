@@ -258,16 +258,6 @@ async def test_run_anonymous_pipeline_0(aclient: AsyncClient, document):
     assert pipeline_result.result == "Hello anonymous Smartextract!"
 
 
-async def test_run_anonymous_pipeline_1(aclient: AsyncClient, document):
-    with pytest.raises(
-        ValueError,
-        match="Only one of code or template must be provided",
-    ):
-        await aclient.run_anonymous_pipeline(
-            document, code="return 1", template="invoice.de"
-        )
-
-
 async def test_run_anonymous_pipeline_2(aclient: AsyncClient, document):
     with pytest.raises(
         ValueError,
@@ -289,9 +279,9 @@ async def test_list_pipeline_jobs(aclient: AsyncClient, lua_pipeline_id, inbox_i
 ## Inbox methods
 
 
-async def test_create_inbox(aclient: AsyncClient, lua_pipeline_id, ocr_alias):
+async def test_create_inbox(aclient: AsyncClient, lua_pipeline_id):
     name = "Test Inbox"
-    inbox_id = await aclient.create_inbox(name, str(lua_pipeline_id), ocr_id=ocr_alias)
+    inbox_id = await aclient.create_inbox(name, str(lua_pipeline_id))
     inbox_info = await aclient.get_resource_info(str(inbox_id))
     assert inbox_info.type == "inbox"
     assert inbox_info.name == name
@@ -300,26 +290,22 @@ async def test_create_inbox(aclient: AsyncClient, lua_pipeline_id, ocr_alias):
 
 
 async def test_modify_inbox(
-    aclient: AsyncClient, lua_pipeline_id, template_pipeline_id, ocr_alias, ocr_alias_2
+    aclient: AsyncClient, lua_pipeline_id, template_pipeline_id
 ):
     name_1 = "Original Inbox"
 
-    inbox_id = await aclient.create_inbox(
-        name_1, str(lua_pipeline_id), ocr_id=ocr_alias
-    )
+    inbox_id = await aclient.create_inbox(name_1, str(lua_pipeline_id))
     await aclient.get_resource_info(inbox_id)
     name_2 = "Modified Inbox"
     await aclient.modify_inbox(
         inbox_id,
         name=name_2,
         pipeline_id=str(template_pipeline_id),
-        ocr_id=ocr_alias_2,
     )
 
     inbox_info = await aclient.get_resource_info(inbox_id)
     assert inbox_info.name == name_2
     assert inbox_info.pipeline_id == template_pipeline_id
-    # Skip test if inbox_info.ocr_id has ocr_alias_2
 
 
 async def test_list_inbox_jobs(aclient: AsyncClient, inbox_id):
